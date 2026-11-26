@@ -1890,6 +1890,9 @@ dialog::backdrop {
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.55;
+}
+
+.message p {
   white-space: pre-wrap;
 }
 
