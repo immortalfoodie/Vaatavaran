@@ -45,9 +45,9 @@ const PAGE_HEADINGS = {
 const saved = loadSavedState();
 const savedCustom =
   saved.customCity &&
-  typeof saved.customCity.name === "string" &&
-  Number.isFinite(saved.customCity.lat) &&
-  Number.isFinite(saved.customCity.lon)
+    typeof saved.customCity.name === "string" &&
+    Number.isFinite(saved.customCity.lat) &&
+    Number.isFinite(saved.customCity.lon)
     ? saved.customCity
     : null;
 
@@ -519,7 +519,10 @@ function bindEvents() {
     $("#" + id)?.addEventListener("click", () => $("#about-dialog").showModal());
   }
   for (const id of ["guide-open", "footer-guide-open"]) {
-    $("#" + id)?.addEventListener("click", () => $("#guide-dialog").showModal());
+    $("#" + id)?.addEventListener("click", () => {
+      closeMobileNav();
+      $("#guide-dialog").showModal();
+    });
   }
   $("#guide-open-profile")?.addEventListener("click", () => {
     $("#guide-dialog").close();

@@ -44,12 +44,12 @@ function describeSource(mode, air, city) {
 
   const formattedObs = air.observedAt
     ? new Intl.DateTimeFormat("en-IN", {
-        day: "numeric",
-        month: "short",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: city.zone,
-      }).format(new Date(air.observedAt))
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: city.zone,
+    }).format(new Date(air.observedAt))
     : null;
   const fetched = air.fetchedAt ? formatTime(city, air.fetchedAt) : "";
 
@@ -431,15 +431,15 @@ function renderSignals(air, plan, completed) {
 
   const items = hours.length
     ? [
-        { count: String(modHours).padStart(2, "0"), label: "CAUTION HOURS", width: barWidthClass(modHours), highlight: false },
-        { count: String(highHours).padStart(2, "0"), label: "HIGH-RISK HOURS", width: highHours > 0 ? "bar-w-100" : "bar-w-55", highlight: highHours > 0 },
-        { count: String(goodHours).padStart(2, "0"), label: "GOOD-AIR HOURS", width: barWidthClass(goodHours), highlight: false },
-      ]
+      { count: String(modHours).padStart(2, "0"), label: "CAUTION HOURS", width: barWidthClass(modHours), highlight: false },
+      { count: String(highHours).padStart(2, "0"), label: "HIGH-RISK HOURS", width: highHours > 0 ? "bar-w-100" : "bar-w-55", highlight: highHours > 0 },
+      { count: String(goodHours).padStart(2, "0"), label: "GOOD-AIR HOURS", width: barWidthClass(goodHours), highlight: false },
+    ]
     : [
-        { count: String(completed.size).padStart(2, "0"), label: "ACTIONS COMPLETED", width: "bar-w-55", highlight: false },
-        { count: Number.isFinite(air.aqi) ? String(Math.round(air.aqi)) : "—", label: plan.category.label.toUpperCase(), width: "bar-w-100", highlight: plan.high },
-        { count: String(Math.max(0, 3 - completed.size)).padStart(2, "0"), label: "ACTIONS REMAINING", width: "bar-w-70", highlight: false },
-      ];
+      { count: String(completed.size).padStart(2, "0"), label: "ACTIONS COMPLETED", width: "bar-w-55", highlight: false },
+      { count: Number.isFinite(air.aqi) ? String(Math.round(air.aqi)) : "—", label: plan.category.label.toUpperCase(), width: "bar-w-100", highlight: plan.high },
+      { count: String(Math.max(0, 3 - completed.size)).padStart(2, "0"), label: "ACTIONS REMAINING", width: "bar-w-70", highlight: false },
+    ];
 
   for (const item of items) {
     const track = el("div", "signal-track");
