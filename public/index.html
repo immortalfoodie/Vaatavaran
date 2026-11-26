@@ -128,6 +128,15 @@
           </button>
           <button
             type="button"
+            id="guide-open"
+            class="icon-square"
+            aria-label="How to use Vaatavaran"
+            title="How to use this site"
+          >
+            ?
+          </button>
+          <button
+            type="button"
             id="about-open"
             class="icon-square"
             aria-label="About data and methodology"
@@ -625,9 +634,14 @@
             ><strong>VAATAVARAN</strong> · THOUGHTFUL CHOICES. CLEANER
             TOMORROWS.</span
           >
-          <button type="button" class="bracket-btn" id="sources-open">
-            [↗] SOURCES, PRIVACY & METHODOLOGY
-          </button>
+          <div class="footer-links">
+            <button type="button" class="bracket-btn" id="footer-guide-open">
+              [?] HOW TO USE
+            </button>
+            <button type="button" class="bracket-btn" id="sources-open">
+              [↗] SOURCES, PRIVACY & METHODOLOGY
+            </button>
+          </div>
         </div>
         <p class="footer-disclaimer">
           General educational guidance, not medical advice. Severe breathing
@@ -641,6 +655,75 @@
       AI ASSISTANT
       <span aria-hidden="true">↗</span>
     </button>
+
+    <!-- NEW USER QUICK GUIDE DIALOG -->
+    <dialog id="guide-dialog" aria-labelledby="guide-title">
+      <div class="panel-head">
+        <h2 id="guide-title">WELCOME TO VAATAVARAN · HOW TO USE</h2>
+        <button
+          type="button"
+          class="icon-square"
+          data-close="guide-dialog"
+          aria-label="Close quick guide"
+        >
+          ×
+        </button>
+      </div>
+      <p class="panel-subcopy">
+        Vaatavaran turns live air quality into a practical daily plan for your
+        household — so you know when to head out, when to keep windows closed,
+        and how to protect sensitive family members.
+      </p>
+      <ol class="guide-steps">
+        <li>
+          <span class="row-key">01 · PICK YOUR LOCATION</span>
+          <strong>Choose a city or search anywhere</strong>
+          <p>
+            Use the top dropdown for 10 Indian cities, or tap <strong>+</strong>
+            to search any town or city worldwide.
+          </p>
+        </li>
+        <li>
+          <span class="row-key">02 · PERSONALIZE YOUR HOUSEHOLD</span>
+          <strong>Tailor advice to your family &amp; budget</strong>
+          <p>
+            Open <strong>HOUSEHOLD</strong> to set sensitivity (children, older
+            adults, asthma), commute, purifier access, and an optional AQI alert
+            threshold. Settings stay private on your device.
+          </p>
+        </li>
+        <li>
+          <span class="row-key">03 · CHECK READINESS &amp; 12-HOUR OUTLOOK</span>
+          <strong>Know what is safer right now</strong>
+          <p>
+            Scan <strong>Can I Go Out?</strong> for instant verdicts (exercise,
+            kids, windows, N95 mask) and click any hour pill in the green
+            12-hour chart to find the lowest-pollution window.
+          </p>
+        </li>
+        <li>
+          <span class="row-key">04 · TRACK, SHARE &amp; ASK AI</span>
+          <strong>Turn guidance into daily habits</strong>
+          <p>
+            Check off your 3 priorities, tap <strong>COPY PLAN</strong> to share
+            with family, explore <strong>ANALYTICS</strong> to compare cities,
+            or open <strong>AI ASSISTANT</strong> for tailored answers.
+          </p>
+        </li>
+      </ol>
+      <div class="dialog-footer">
+        <button type="button" id="guide-open-profile" class="bracket-btn">
+          [↗] PERSONALIZE HOUSEHOLD
+        </button>
+        <button
+          type="button"
+          class="btn btn-dark"
+          data-close="guide-dialog"
+        >
+          GOT IT →
+        </button>
+      </div>
+    </dialog>
 
     <!-- ANY-CITY SEARCH DIALOG -->
     <dialog id="city-dialog" aria-labelledby="city-dialog-title">

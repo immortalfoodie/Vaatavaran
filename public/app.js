@@ -518,6 +518,13 @@ function bindEvents() {
   for (const id of ["about-open", "sources-open"]) {
     $("#" + id)?.addEventListener("click", () => $("#about-dialog").showModal());
   }
+  for (const id of ["guide-open", "footer-guide-open"]) {
+    $("#" + id)?.addEventListener("click", () => $("#guide-dialog").showModal());
+  }
+  $("#guide-open-profile")?.addEventListener("click", () => {
+    $("#guide-dialog").close();
+    openProfile();
+  });
 
   $("#copy-plan")?.addEventListener("click", copyPlan);
   $("#plan-copy")?.addEventListener("click", copyPlan);
