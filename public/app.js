@@ -72,6 +72,7 @@ const state = {
         ? saved.city
         : "mumbai",
   mode: ["demo", "live", "model"].includes(saved.mode) ? saved.mode : "model",
+  googleUpgraded: saved.googleUpgraded === true,
   air: { aqi: null, hourly: [] },
   forecastAir: null,
   completed: new Set(),
@@ -111,6 +112,7 @@ function persist() {
         customCity: state.customCity,
         city: state.cityId,
         mode: state.mode,
+        googleUpgraded: state.googleUpgraded,
         day: dayKey(),
         completed: [...state.completed],
       }),
@@ -712,9 +714,11 @@ fetch("/api/health")
       : data.stationData
         ? "STATION FEED"
         : "REGIONAL MODEL";
-    if (data.googleAir && !saved.mode && state.mode !== "live") {
+    if (data.googleAir && !state.googleUpgraded && state.mode !== "demo") {
+      state.googleUpgraded = true;
       state.mode = "live";
       $("#data-mode").value = "live";
+      persist();
       loadAir();
     }
     $("#ai-optin").disabled = !data.ai;
