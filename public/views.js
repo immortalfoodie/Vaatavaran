@@ -31,9 +31,10 @@ function svgEl(tag, attrs = {}) {
   return node;
 }
 
-function getSourceLabel(mode, station) {
+function getSourceLabel(mode, kind) {
   if (mode === "demo") return "Demo scenario";
-  return station ? "Station-reported AQI" : "Regional forecast estimate";
+  if (kind === "google") return "Google Air Quality (500m)";
+  return kind === "station" ? "Station-reported AQI" : "Regional forecast estimate";
 }
 
 /** Main stateless dashboard renderer: coordinates focused section renderers. */
@@ -49,8 +50,9 @@ export function renderDashboard({
   onSelectHour,
 }) {
   const plan = makePlan(air, profile);
-  const station = air.source?.kind === "station";
-  const sourceLabel = getSourceLabel(mode, station);
+  const kind = air.source?.kind || "model";
+  const station = kind === "station";
+  const sourceLabel = getSourceLabel(mode, kind);
   const outlookAir = air.hourly?.length ? air : forecastAir || air;
   const outlookPlan = outlookAir === air ? plan : makePlan(outlookAir, profile);
   const separateOutlook = outlookAir !== air && Boolean(outlookAir.hourly?.length);
@@ -169,39 +171,62 @@ function renderAirCard({ air, forecastAir, plan, city, mode, station, sourceLabe
     );
   }
 
+  const isGoogle = air.source?.kind === "google";
   $("#data-type").replaceChildren(
     document.createTextNode(
-      mode === "demo" ? "Demo " : station ? "Station " : "Model ",
+      mode === "demo"
+        ? "Demo "
+        : isGoogle
+          ? "Google "
+          : station
+            ? "Station "
+            : "Model ",
     ),
-    el("small", "", mode === "demo" ? "scenario" : station ? "report" : "forecast"),
+    el(
+      "small",
+      "",
+      mode === "demo"
+        ? "scenario"
+        : isGoogle
+          ? "500m live"
+          : station
+            ? "report"
+            : "forecast",
+    ),
   );
   $("#data-label").textContent = hasReading
     ? mode === "demo"
       ? "DEMO DATA"
-      : station
-        ? "STATION LIVE"
-        : "MODEL LIVE"
+      : isGoogle
+        ? "GOOGLE 500M LIVE"
+        : station
+          ? "STATION LIVE"
+          : "MODEL LIVE"
     : "CHECKING DATA";
   $("#data-description").textContent =
     mode === "demo"
       ? "Illustrative winter-smog scenario · not current conditions"
-      : station
-        ? `WAQI · station ${air.source.distanceKm} km from city centre`
-        : "Copernicus CAMS global model · ~45 km resolution";
+      : isGoogle
+        ? `Google Air Quality · 500 m sensor-fused grid${air.localIndex ? ` · ${air.localIndex.name}: ${air.localIndex.aqi}` : ""}`
+        : station
+          ? `WAQI · station ${air.source.distanceKm} km from city centre`
+          : "Copernicus CAMS global model · ~45 km resolution";
 
   $("#observed-label").textContent =
     mode === "demo"
       ? "Demo scenario · switch to Best Source for live data"
       : air.observedAt
-        ? `${station ? "Station reported" : "Model valid"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: city.zone }).format(new Date(air.observedAt))} · fetched ${formatTime(city, air.fetchedAt)}`
+        ? `${isGoogle ? "Google updated" : station ? "Station reported" : "Model valid"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: city.zone }).format(new Date(air.observedAt))} · fetched ${formatTime(city, air.fetchedAt)}`
         : "No valid reading for the selected source";
 
   $("#source-warning").textContent =
     mode === "demo"
       ? "Illustrative scenario. Do not use these numbers as current conditions."
-      : station
-        ? "PM values are pollutant-specific US AQI, not concentrations (µg/m³). One nearby station, not a city-wide average. Data is provisional."
-        : "Not a street-level sensor reading. Local pollution may differ substantially.";
+      : isGoogle
+        ? "US AQI computed from Google Air Quality 500 m PM2.5/PM10 concentrations. Street-level micro-conditions can still vary."
+        : station
+          ? "PM values are pollutant-specific US AQI, not concentrations (µg/m³). One nearby station, not a city-wide average. Data is provisional."
+          : "Not a street-level sensor reading. Local pollution may differ substantially.";
 
   renderAttribution(air, mode);
   $(".air-card").dataset.tone = plan.category.tone;

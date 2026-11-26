@@ -272,8 +272,8 @@ async function loadAir() {
       }
       render();
 
-      // Station feeds do not include hourly forecasts; load the separate CAMS regional outlook in parallel.
-      if (data.source?.kind === "station" && !data.hourly?.length) {
+      // Feeds without hourly forecasts (Google Air / WAQI) load the separate CAMS 12h outlook in parallel.
+      if (!data.hourly?.length) {
         fetch(airQueryUrl(city, "model"), {
           signal: AbortSignal.timeout(10000),
         })
@@ -707,9 +707,16 @@ loadAir();
 fetch("/api/health")
   .then((r) => r.json())
   .then((data) => {
-    $("#data-mode option[value=live]").textContent = data.stationData
-      ? "STATION FEED"
-      : "REGIONAL MODEL";
+    $("#data-mode option[value=live]").textContent = data.googleAir
+      ? "GOOGLE AIR (500M)"
+      : data.stationData
+        ? "STATION FEED"
+        : "REGIONAL MODEL";
+    if (data.googleAir && !saved.mode && state.mode !== "live") {
+      state.mode = "live";
+      $("#data-mode").value = "live";
+      loadAir();
+    }
     $("#ai-optin").disabled = !data.ai;
     $("#ai-availability").textContent = data.ai
       ? "(Gemini · opt-in)"

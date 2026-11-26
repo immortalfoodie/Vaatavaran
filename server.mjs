@@ -93,9 +93,10 @@ export function createHandler({
   apiKey = process.env.GEMINI_API_KEY,
   model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
   stationToken = process.env.WAQI_API_TOKEN || "",
+  googleAirKey = process.env.GOOGLE_AIR_QUALITY_API_KEY || "",
   clock = Date.now,
 } = {}) {
-  const airFor = createAirService(fetcher, clock, stationToken);
+  const airFor = createAirService(fetcher, clock, stationToken, googleAirKey);
   const clients = new Map();
   const staticCache = new Map();
   return async (req, res) => {
@@ -134,7 +135,13 @@ export function createHandler({
         return res.end(entry.content);
       }
       if (url.pathname === "/api/health" && req.method === "GET")
-        return send(200, { ok: true, ai: Boolean(apiKey), provider: "Gemini", stationData: Boolean(stationToken) });
+        return send(200, {
+          ok: true,
+          ai: Boolean(apiKey),
+          provider: "Gemini",
+          stationData: Boolean(stationToken),
+          googleAir: Boolean(googleAirKey),
+        });
       if (!url.pathname.startsWith("/api/"))
         return send(404, { error: "Not found" });
       const ip =
