@@ -254,3 +254,57 @@ test("Blocked and truncated Gemini responses never appear as complete AI guidanc
     assert.ok(!data.answer.includes("Incomplete advice"));
   }
 });
+
+test("Parser computes 24-hour delta when yesterday reading is available", () => {
+  const start = Math.floor(now / 3600000) * 3600;
+  const parsed = parseAir(
+    {
+      hourly: {
+        time: [start - 86400, start, start + 3600],
+        us_aqi: [160, 182, 175],
+        pm2_5: [70, 88, 82],
+        pm10: [110, 130, 124],
+      },
+    },
+    "delhi",
+    now,
+  );
+  assert.equal(parsed.aqi, 182);
+  assert.equal(parsed.yesterdayAqi, 160);
+  assert.equal(parsed.delta24h, 22);
+});
+
+test("Geocode and custom-coordinate air endpoints validate inputs safely", async (t) => {
+  const app = await fixture(t, {
+    fetcher: async (url) => {
+      const href = String(url);
+      if (href.includes("geocoding-api")) {
+        return {
+          ok: true,
+          json: async () => ({
+            results: [
+              {
+                name: "Chandigarh",
+                admin1: "Chandigarh",
+                country: "India",
+                latitude: 30.7333,
+                longitude: 76.7794,
+                timezone: "Asia/Kolkata",
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: true, json: async () => upstream() };
+    },
+  });
+  assert.equal((await app.get("/api/geocode?q=a")).status, 400);
+  const geo = await (await app.get("/api/geocode?q=Chandigarh")).json();
+  assert.equal(geo.results[0].name, "Chandigarh");
+
+  assert.equal((await app.get("/api/air?lat=999&lon=77&mode=model")).status, 400);
+  assert.equal((await app.get("/api/air?lat=30.73&lon=76.77&mode=demo")).status, 400);
+  const custom = await app.get("/api/air?lat=30.73&lon=76.77&name=Chandigarh&mode=model");
+  assert.equal(custom.status, 200);
+  assert.equal((await custom.json()).aqi, 180);
+});

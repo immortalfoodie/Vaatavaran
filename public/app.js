@@ -1,4 +1,10 @@
-import { renderDashboard, renderImpact, el } from "./views.js";
+import {
+  renderDashboard,
+  renderForecast,
+  renderImpact,
+  renderCityComparison,
+  el,
+} from "./views.js";
 import {
   CITIES,
   DEFAULT_PROFILE,
@@ -45,18 +51,39 @@ function readStorage() {
 }
 
 const saved = readStorage();
+const savedCustom =
+  saved.customCity &&
+  typeof saved.customCity.name === "string" &&
+  Number.isFinite(saved.customCity.lat) &&
+  Number.isFinite(saved.customCity.lon)
+    ? saved.customCity
+    : null;
+
 const state = {
   profile: normalizeProfile(saved.profile || DEFAULT_PROFILE),
-  cityId: CITIES.some((c) => c.id === saved.city) ? saved.city : "delhi",
+  alertAbove: [0, 100, 150, 200].includes(Number(saved.alertAbove))
+    ? Number(saved.alertAbove)
+    : 0,
+  customCity: savedCustom,
+  cityId:
+    saved.city === "custom" && savedCustom
+      ? "custom"
+      : CITIES.some((c) => c.id === saved.city)
+        ? saved.city
+        : "delhi",
   mode: ["demo", "live", "model"].includes(saved.mode) ? saved.mode : "live",
   air: { aqi: null, hourly: [] },
+  forecastAir: null,
   completed: new Set(),
   selectedHourIndex: null,
   requestId: 0,
   chatBusy: false,
 };
 
-const currentCity = () => CITIES.find((c) => c.id === state.cityId);
+const currentCity = () =>
+  state.cityId === "custom" && state.customCity
+    ? { id: "custom", ...state.customCity }
+    : CITIES.find((c) => c.id === state.cityId) || CITIES[0];
 const dayKey = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: currentCity().zone }).format(
     new Date(),
@@ -68,8 +95,10 @@ if (saved.day === dayKey() && Array.isArray(saved.completed)) {
   );
 }
 
-function setStatus(message) {
+function setStatus(message, { showRecovery = false } = {}) {
   $("#status").textContent = message;
+  $("#status-banner").hidden = !message;
+  $("#status-actions").hidden = !showRecovery;
 }
 
 function persist() {
@@ -78,6 +107,8 @@ function persist() {
       STORAGE_KEY,
       JSON.stringify({
         profile: state.profile,
+        alertAbove: state.alertAbove,
+        customCity: state.customCity,
         city: state.cityId,
         mode: state.mode,
         day: dayKey(),
@@ -91,9 +122,64 @@ function persist() {
   }
 }
 
+function airQueryUrl(city, mode) {
+  if (city.id === "custom") {
+    const params = new URLSearchParams({
+      lat: String(city.lat),
+      lon: String(city.lon),
+      name: city.name,
+      zone: city.zone || "Asia/Kolkata",
+      mode,
+    });
+    return `/api/air?${params}`;
+  }
+  return `/api/air?city=${city.id}&mode=${mode}`;
+}
+
+function populateCitySelect() {
+  const select = $("#city");
+  select.replaceChildren();
+  for (const city of CITIES) {
+    const option = el("option", "", `${city.name} · ${city.region}`);
+    option.value = city.id;
+    select.append(option);
+  }
+  if (state.customCity) {
+    const opt = el(
+      "option",
+      "",
+      `${state.customCity.name}${state.customCity.region ? " · " + state.customCity.region : ""} (Custom)`,
+    );
+    opt.value = "custom";
+    select.append(opt);
+  }
+  select.value = state.cityId;
+}
+
+function renderForecastOnly() {
+  const outlookAir = state.air.hourly?.length
+    ? state.air
+    : state.forecastAir || state.air;
+  const separateOutlook =
+    outlookAir !== state.air && Boolean(outlookAir.hourly?.length);
+  renderForecast({
+    air: outlookAir,
+    plan: makePlan(outlookAir, state.profile),
+    mode: separateOutlook ? "model" : state.mode,
+    city: currentCity(),
+    separateOutlook,
+    selectedHourIndex: state.selectedHourIndex,
+    onSelectHour(index) {
+      state.selectedHourIndex = index;
+      renderForecastOnly();
+    },
+  });
+}
+
 function render() {
   renderDashboard({
     air: state.air,
+    forecastAir: state.forecastAir,
     profile: state.profile,
     city: currentCity(),
     mode: state.mode,
@@ -106,7 +192,7 @@ function render() {
     },
     onSelectHour(index) {
       state.selectedHourIndex = index;
-      render();
+      renderForecastOnly();
     },
   });
 }
@@ -144,7 +230,13 @@ function route() {
 
 async function loadAir() {
   const id = ++state.requestId;
+  const city = currentCity();
+  if (city.id === "custom" && state.mode === "demo") {
+    state.mode = "model";
+    $("#data-mode").value = "model";
+  }
   state.selectedHourIndex = null;
+  state.forecastAir = null;
   $("#refresh").disabled = true;
   $("#today-view").setAttribute("aria-busy", "true");
   $(".air-card").dataset.state = "loading";
@@ -160,23 +252,49 @@ async function loadAir() {
 
   try {
     if (state.mode !== "demo") {
-      const response = await fetch(
-        `/api/air?city=${state.cityId}&mode=${state.mode}`,
-        { signal: AbortSignal.timeout(10000) },
-      );
+      const response = await fetch(airQueryUrl(city, state.mode), {
+        signal: AbortSignal.timeout(10000),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Air data unavailable");
       if (id !== state.requestId) return;
       state.air = data;
-      setStatus("");
+      if (
+        state.alertAbove > 0 &&
+        Number.isFinite(data.aqi) &&
+        data.aqi >= state.alertAbove
+      ) {
+        setStatus(
+          `Proactive alert: ${city.name} is at US AQI ${data.aqi} (your alert threshold: ${state.alertAbove}+).`,
+        );
+      } else {
+        setStatus("");
+      }
       render();
+
+      // Station feeds do not include hourly forecasts; load the separate CAMS regional outlook in parallel.
+      if (data.source?.kind === "station" && !data.hourly?.length) {
+        fetch(airQueryUrl(city, "model"), {
+          signal: AbortSignal.timeout(10000),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((modelData) => {
+            if (id !== state.requestId || !modelData?.hourly?.length) return;
+            state.forecastAir = modelData;
+            render();
+          })
+          .catch(() => {
+            /* Keep station view intact if regional outlook is temporarily unreachable. */
+          });
+      }
     }
     $(".air-card").dataset.state = state.mode;
   } catch (error) {
     if (id === state.requestId) {
       $(".air-card").dataset.state = "error";
       setStatus(
-        `${error.name === "TimeoutError" ? "Live data timed out." : error.message} You can retry or select Demo scenario. No demo data has been substituted.`,
+        `${error.name === "TimeoutError" ? "Live data timed out." : error.message}`,
+        { showRecovery: true },
       );
     }
   } finally {
@@ -185,6 +303,85 @@ async function loadAir() {
       $("#today-view").setAttribute("aria-busy", "false");
     }
   }
+}
+
+async function searchAnyCity(query) {
+  const container = $("#city-search-results");
+  container.replaceChildren(el("p", "source-caption", "Searching locations…"));
+  $("#city-search-submit").disabled = true;
+  try {
+    const response = await fetch(
+      `/api/geocode?q=${encodeURIComponent(query)}`,
+      { signal: AbortSignal.timeout(8000) },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Search unavailable");
+    container.replaceChildren();
+    if (!data.results?.length) {
+      container.append(
+        el("p", "source-caption", "No matching cities found. Try another spelling."),
+      );
+      return;
+    }
+    for (const loc of data.results) {
+      const btn = el("button", "city-result-btn");
+      btn.type = "button";
+      const left = el("div");
+      left.append(el("strong", "", loc.name), el("span", "", loc.region));
+      btn.append(left, el("span", "row-key", "SELECT ↗"));
+      btn.addEventListener("click", () => {
+        state.customCity = loc;
+        state.cityId = "custom";
+        if (state.mode === "demo") {
+          state.mode = "model";
+          $("#data-mode").value = "model";
+        }
+        state.completed.clear();
+        populateCitySelect();
+        persist();
+        $("#city-dialog").close();
+        loadAir();
+      });
+      container.append(btn);
+    }
+  } catch (error) {
+    container.replaceChildren(el("p", "source-caption", error.message));
+  } finally {
+    $("#city-search-submit").disabled = false;
+  }
+}
+
+async function loadCityComparison() {
+  const btn = $("#compare-load");
+  const container = $("#city-compare-list");
+  btn.disabled = true;
+  container.replaceChildren(
+    el("p", "source-caption", "Fetching live regional readings across cities…"),
+  );
+  const sample = CITIES.slice(0, 6);
+  const settled = await Promise.allSettled(
+    sample.map(async (city) => {
+      const res = await fetch(airQueryUrl(city, "model"), {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error("Unavailable");
+      const data = await res.json();
+      return { city, aqi: data.aqi };
+    }),
+  );
+  const rows = settled
+    .filter((r) => r.status === "fulfilled")
+    .map((r) => r.value)
+    .sort((a, b) => (b.aqi ?? -1) - (a.aqi ?? -1));
+  renderCityComparison(rows, state.cityId, (pickedId) => {
+    state.cityId = pickedId;
+    $("#city").value = pickedId;
+    state.completed.clear();
+    persist();
+    location.hash = "#today";
+    loadAir();
+  });
+  btn.disabled = false;
 }
 
 function buildPlanText(community = false) {
@@ -247,6 +444,8 @@ function openProfile() {
     if (field.type === "checkbox") field.checked = value;
     else field.value = value;
   }
+  const alertField = form.elements.namedItem("alertAbove");
+  if (alertField) alertField.value = String(state.alertAbove);
   $("#profile-dialog").showModal();
 }
 
@@ -288,8 +487,12 @@ async function ask(question) {
   state.chatBusy = true;
   $("#send-question").disabled = true;
   $("#question").value = "";
+  const city = currentCity();
   const context = {
     city: state.cityId,
+    ...(city.id === "custom"
+      ? { lat: city.lat, lon: city.lon, cityName: city.name, zone: city.zone }
+      : {}),
     mode: state.mode,
     profile: { ...state.profile },
     question,
@@ -340,13 +543,21 @@ async function ask(question) {
 }
 
 function bindEvents() {
-  for (const city of CITIES) {
-    const option = el("option", "", `${city.name} · ${city.region}`);
-    option.value = city.id;
-    $("#city").append(option);
-  }
-  $("#city").value = state.cityId;
+  populateCitySelect();
   $("#data-mode").value = state.mode;
+
+  $("#city-search-open")?.addEventListener("click", () => {
+    $("#city-dialog").showModal();
+    $("#city-query").focus();
+  });
+
+  $("#city-search-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const q = $("#city-query").value.trim();
+    if (q.length >= 2) searchAnyCity(q);
+  });
+
+  $("#compare-load")?.addEventListener("click", loadCityComparison);
 
   $("#city").addEventListener("change", () => {
     state.cityId = $("#city").value;
@@ -363,6 +574,13 @@ function bindEvents() {
   });
 
   $("#refresh").addEventListener("click", loadAir);
+  $("#retry-air")?.addEventListener("click", loadAir);
+  $("#switch-to-model")?.addEventListener("click", () => {
+    state.mode = "model";
+    $("#data-mode").value = "model";
+    persist();
+    loadAir();
+  });
 
   for (const id of [
     "profile-open",
@@ -400,6 +618,8 @@ function bindEvents() {
       sensitive: data.has("sensitive"),
       purifier: data.has("purifier"),
     });
+    const threshold = Number(data.get("alertAbove"));
+    state.alertAbove = [0, 100, 150, 200].includes(threshold) ? threshold : 0;
     state.completed.clear();
     persist();
     render();
@@ -414,6 +634,10 @@ function bindEvents() {
       /* No storage available. */
     }
     state.profile = normalizeProfile(DEFAULT_PROFILE);
+    state.alertAbove = 0;
+    state.customCity = null;
+    if (state.cityId === "custom") state.cityId = "delhi";
+    populateCitySelect();
     state.completed.clear();
     resetChatMessages();
     $("#ai-optin").checked = false;
@@ -470,7 +694,6 @@ function refreshAgingContext() {
 bindEvents();
 document.addEventListener("visibilitychange", refreshAgingContext);
 window.setInterval(refreshAgingContext, 60000);
-render();
 route();
 loadAir();
 

@@ -23,22 +23,33 @@
           <span>VAATAVARAN</span>
         </a>
 
-        <label class="search-box">
-          <svg
-            viewBox="0 0 20 20"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            aria-hidden="true"
+        <div class="city-picker">
+          <label class="search-box">
+            <svg
+              viewBox="0 0 20 20"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              aria-hidden="true"
+            >
+              <circle cx="9" cy="9" r="6" />
+              <path d="M13.5 13.5L18 18" />
+            </svg>
+            <span class="sr-only">Choose city</span>
+            <select id="city" aria-label="Choose city"></select>
+          </label>
+          <button
+            type="button"
+            id="city-search-open"
+            class="icon-square"
+            aria-label="Search any city worldwide"
+            title="Search any city"
           >
-            <circle cx="9" cy="9" r="6" />
-            <path d="M13.5 13.5L18 18" />
-          </svg>
-          <span class="sr-only">Choose city</span>
-          <select id="city" aria-label="Choose city"></select>
-        </label>
+            +
+          </button>
+        </div>
 
         <nav class="top-nav" id="top-nav" aria-label="Main navigation">
           <a class="nav-pill active" href="#today" data-page="today"
@@ -127,12 +138,17 @@
         </div>
       </section>
 
-      <p
-        id="status"
-        class="status-message"
-        role="status"
-        aria-live="polite"
-      ></p>
+      <div class="status-banner" id="status-banner" hidden>
+        <p id="status" class="status-text" role="status" aria-live="polite"></p>
+        <div class="status-actions" id="status-actions" hidden>
+          <button type="button" class="bracket-btn" id="switch-to-model">
+            [↗] USE REGIONAL MODEL
+          </button>
+          <button type="button" class="bracket-btn" id="retry-air">
+            [↻] RETRY
+          </button>
+        </div>
+      </div>
 
       <!-- VIEW 1: TODAY'S OVERVIEW (Calm, Spacious 3-Band Layout) -->
       <section id="today-view" class="view">
@@ -155,9 +171,12 @@
             <div class="kpi-hero">
               <div class="kpi-meta">
                 <p class="kpi-location" id="air-location">New Delhi, India</p>
-                <span id="aqi-category" class="status-tag unknown"
-                  >CHECKING AIR</span
-                >
+                <div class="kpi-badges">
+                  <span id="aqi-category" class="status-tag unknown"
+                    >CHECKING AIR</span
+                  >
+                  <span id="aqi-delta" class="delta-pill" hidden></span>
+                </div>
                 <p class="kpi-guidance" id="aqi-guidance">
                   Fetching the latest air quality data
                 </p>
@@ -197,11 +216,23 @@
             </div>
 
             <div class="source-footer">
+              <p class="who-note" id="who-context" hidden></p>
               <p class="source-caption" id="observed-label">
                 Connecting to air quality provider
               </p>
               <p class="source-caption" id="data-description"></p>
               <div id="source-attribution" class="source-attribution"></div>
+              <details class="scale-explainer">
+                <summary>US AQI VS INDIA NAQI</summary>
+                <p>
+                  This app uses the <strong>US AQI</strong> scale (0–50 Good,
+                  51–100 Moderate, 101–150 Unhealthy for sensitive groups,
+                  151–200 Unhealthy, 201–300 Very unhealthy, 301–500 Hazardous).
+                  India’s CPCB National AQI uses wider bands (e.g. 101–200 is
+                  labelled Moderate), so numbers and labels are not directly
+                  interchangeable.
+                </p>
+              </details>
             </div>
           </section>
 
@@ -454,6 +485,25 @@
 
       <!-- VIEW 4: ANALYTICS & IMPACT -->
       <section id="impact-view" class="view" hidden>
+        <section class="panel compare-panel" aria-labelledby="compare-head">
+          <div class="panel-head">
+            <h2 id="compare-head">LIVE CITY COMPARISON</h2>
+            <button type="button" class="bracket-btn" id="compare-load">
+              [↻] COMPARE INDIAN CITIES
+            </button>
+          </div>
+          <p class="panel-subcopy">
+            Compare real-time Open-Meteo/CAMS regional US AQI across major
+            Indian cities side by side.
+          </p>
+          <div class="compare-grid" id="city-compare-list">
+            <p class="source-caption">
+              Click <strong>COMPARE INDIAN CITIES</strong> to load live readings
+              across cities.
+            </p>
+          </div>
+        </section>
+
         <div class="analytics-top-grid">
           <section class="panel density-panel" aria-labelledby="density-head">
             <div class="panel-head">
@@ -592,6 +642,45 @@
       <span aria-hidden="true">↗</span>
     </button>
 
+    <!-- ANY-CITY SEARCH DIALOG -->
+    <dialog id="city-dialog" aria-labelledby="city-dialog-title">
+      <div class="panel-head">
+        <h2 id="city-dialog-title">SEARCH ANY CITY</h2>
+        <button
+          type="button"
+          class="icon-square"
+          data-close="city-dialog"
+          aria-label="Close city search"
+        >
+          ×
+        </button>
+      </div>
+      <p class="panel-subcopy">
+        Search any city or town worldwide to view live regional air quality and
+        12-hour forecast.
+      </p>
+      <form id="city-search-form" class="chat-form">
+        <label class="sr-only" for="city-query">City or town name</label>
+        <input
+          id="city-query"
+          minlength="2"
+          maxlength="80"
+          required
+          placeholder="E.G. GURUGRAM, CHANDIGARH, KOCHI…"
+          autocomplete="off"
+        />
+        <button
+          class="send-circle"
+          id="city-search-submit"
+          type="submit"
+          aria-label="Search city"
+        >
+          →
+        </button>
+      </form>
+      <div id="city-search-results" class="city-results" aria-live="polite"></div>
+    </dialog>
+
     <!-- HOUSEHOLD PROFILE DIALOG -->
     <dialog id="profile-dialog" aria-labelledby="profile-title">
       <form id="profile-form">
@@ -639,6 +728,15 @@
             <select name="outdoor">
               <option value="morning">Morning</option>
               <option value="evening">Evening</option>
+            </select>
+          </label>
+          <label>
+            PROACTIVE AQI ALERT
+            <select name="alertAbove">
+              <option value="0">Off</option>
+              <option value="100">Alert at AQI 100+</option>
+              <option value="150">Alert at AQI 150+</option>
+              <option value="200">Alert at AQI 200+</option>
             </select>
           </label>
         </div>

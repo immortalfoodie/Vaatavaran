@@ -39,6 +39,7 @@ function getSourceLabel(mode, station) {
 /** Main stateless dashboard renderer: coordinates focused section renderers. */
 export function renderDashboard({
   air,
+  forecastAir,
   profile,
   city,
   mode,
@@ -50,16 +51,27 @@ export function renderDashboard({
   const plan = makePlan(air, profile);
   const station = air.source?.kind === "station";
   const sourceLabel = getSourceLabel(mode, station);
+  const outlookAir = air.hourly?.length ? air : forecastAir || air;
+  const outlookPlan = outlookAir === air ? plan : makePlan(outlookAir, profile);
+  const separateOutlook = outlookAir !== air && Boolean(outlookAir.hourly?.length);
 
   renderHeaderMeta({ air, plan, profile, city, sourceLabel });
-  renderAirCard({ air, plan, city, mode, station, sourceLabel });
-  renderBriefCard({ air, plan, city, station });
+  renderAirCard({ air, forecastAir, plan, city, mode, station, sourceLabel });
+  renderBriefCard({ plan, outlookPlan, city, station, separateOutlook });
   renderPriorities({ plan, completed, onComplete });
   renderProfileSummary(profile, city);
-  renderForecast({ air, plan, mode, city, selectedHourIndex, onSelectHour });
+  renderForecast({
+    air: outlookAir,
+    plan: outlookPlan,
+    mode: separateOutlook ? "model" : mode,
+    city,
+    separateOutlook,
+    selectedHourIndex,
+    onSelectHour,
+  });
   renderActivityReadiness(air, profile);
-  renderExposureMatrix(air, city);
-  renderSignals(air, plan, completed);
+  renderExposureMatrix(outlookAir, city);
+  renderSignals(outlookAir, outlookPlan, completed);
 
   $("#home-personal").textContent = plan.cards[2].action;
   $("#chat-context").textContent =
@@ -91,7 +103,7 @@ function renderHeaderMeta({ air, plan, profile, city }) {
   $("#header-aqi-label").textContent = plan.category.label.toUpperCase();
 }
 
-function renderAirCard({ air, plan, city, mode, station, sourceLabel }) {
+function renderAirCard({ air, forecastAir, plan, city, mode, station, sourceLabel }) {
   const hasReading = Number.isFinite(air.aqi);
   $("#air-heading").textContent = hasReading
     ? sourceLabel.toUpperCase()
@@ -102,6 +114,25 @@ function renderAirCard({ air, plan, city, mode, station, sourceLabel }) {
   $("#aqi").textContent = hasReading ? String(Math.round(air.aqi)) : "—";
   $("#aqi-category").textContent = plan.category.label.toUpperCase();
   $("#aqi-category").className = `status-tag ${plan.category.tone}`;
+
+  const delta = Number.isFinite(air.delta24h)
+    ? air.delta24h
+    : Number.isFinite(forecastAir?.delta24h)
+      ? forecastAir.delta24h
+      : null;
+  const deltaEl = $("#aqi-delta");
+  if (delta !== null && mode !== "demo") {
+    deltaEl.hidden = false;
+    deltaEl.className = `delta-pill${delta > 0 ? " worse" : ""}`;
+    const suffix = Number.isFinite(air.delta24h) ? "VS YESTERDAY" : "MODEL 24H";
+    deltaEl.textContent =
+      delta === 0
+        ? `SAME ${suffix}`
+        : `${delta > 0 ? "↑" : "↓"} ${Math.abs(delta)} ${suffix}`;
+  } else {
+    deltaEl.hidden = true;
+  }
+
   $("#aqi-guidance").textContent =
     plan.category.level < 0
       ? "Check local monitoring"
@@ -110,6 +141,18 @@ function renderAirCard({ air, plan, city, mode, station, sourceLabel }) {
         : "Stay aware of local conditions";
 
   renderSegmentedMeter(air.aqi);
+
+  const whoEl = $("#who-context");
+  if (!station && Number.isFinite(air.pm25) && air.pm25 > 0) {
+    const ratio = (air.pm25 / 15).toFixed(1);
+    whoEl.hidden = false;
+    whoEl.textContent =
+      air.pm25 > 15
+        ? `Hourly PM2.5 is ~${ratio}× the WHO 24h guideline (15 µg/m³).`
+        : "Hourly PM2.5 is within the WHO 24h guideline (15 µg/m³).";
+  } else {
+    whoEl.hidden = true;
+  }
 
   for (const [id, value] of [
     ["pm25", station ? air.pollutantAqi?.pm25 : air.pm25],
@@ -164,7 +207,7 @@ function renderAirCard({ air, plan, city, mode, station, sourceLabel }) {
   $(".air-card").dataset.tone = plan.category.tone;
 }
 
-function renderBriefCard({ plan, city, station }) {
+function renderBriefCard({ plan, outlookPlan, city, station, separateOutlook }) {
   $("#hero-title").textContent = plan.headline;
   $("#hero-summary").textContent = plan.summary;
   $("#outdoor-summary").textContent =
@@ -176,10 +219,11 @@ function renderBriefCard({ plan, city, station }) {
   $("#window-summary").textContent = plan.high
     ? "Keep peaks out"
     : "Ventilate cleanly";
-  $("#best-slot").textContent = plan.best
-    ? `${formatTime(city, plan.best.time)} · AQI ${plan.best.aqi}`
+  const best = plan.best || outlookPlan?.best;
+  $("#best-slot").textContent = best
+    ? `${formatTime(city, best.time)} · AQI ${best.aqi}${separateOutlook ? " (model)" : ""}`
     : station
-      ? "Station feed only"
+      ? "Loading model…"
       : "Unavailable";
 }
 
@@ -337,8 +381,16 @@ function updateCompletion(completed) {
   $("#brief-progress").textContent = `${count} OF 3 DONE`;
 }
 
-/** Interactive Stacked-Circle Dot-Matrix Chart + Hour Inspector. */
-function renderForecast({ air, plan, mode, city, selectedHourIndex, onSelectHour }) {
+/** Interactive Stacked-Circle Dot-Matrix Chart + Hour Inspector (exported for fast targeted updates). */
+export function renderForecast({
+  air,
+  plan,
+  mode,
+  city,
+  separateOutlook = false,
+  selectedHourIndex,
+  onSelectHour,
+}) {
   const chart = $("#forecast");
   const pills = $("#hour-pills");
   const table = $("#forecast-table");
@@ -349,9 +401,11 @@ function renderForecast({ air, plan, mode, city, selectedHourIndex, onSelectHour
   $("#forecast-label").textContent =
     mode === "demo"
       ? "DEMO OUTLOOK"
-      : air.source?.kind === "station"
-        ? "STATION FEED"
-        : "REGIONAL MODEL";
+      : separateOutlook
+        ? "SEPARATE CAMS MODEL"
+        : air.source?.kind === "station"
+          ? "STATION FEED"
+          : "REGIONAL MODEL";
 
   const hours = (air.hourly || []).slice(0, 12);
   if (!hours.length) {
@@ -369,8 +423,8 @@ function renderForecast({ air, plan, mode, city, selectedHourIndex, onSelectHour
   const bestIdx = hours.findIndex((h) => h.time === plan.best?.time);
   const activeIdx =
     Number.isInteger(selectedHourIndex) &&
-    selectedHourIndex >= 0 &&
-    selectedHourIndex < hours.length
+      selectedHourIndex >= 0 &&
+      selectedHourIndex < hours.length
       ? selectedHourIndex
       : bestIdx >= 0
         ? bestIdx
@@ -491,7 +545,7 @@ function renderForecast({ air, plan, mode, city, selectedHourIndex, onSelectHour
     `${mode === "demo" ? "Illustrative" : "Modelled"} hourly US AQI: ${hours.map((h) => `${formatTime(city, h.time)}: ${h.aqi}`).join(", ")}. A data table follows.`,
   );
   $("#best-window").textContent = plan.best
-    ? `Lowest in outlook: ${formatTime(city, plan.best.time)} · AQI ${plan.best.aqi} (${category(plan.best.aqi).label.toLowerCase()}). Lower does not mean safe.`
+    ? `${separateOutlook ? "Separate regional model (not a continuation of the station reading). " : ""}Lowest in outlook: ${formatTime(city, plan.best.time)} · AQI ${plan.best.aqi} (${category(plan.best.aqi).label.toLowerCase()}). Lower does not mean safe.`
     : "";
 }
 
@@ -723,4 +777,31 @@ export function renderImpact(distance) {
   svg.append(cLabel);
 
   chart.append(svg);
+}
+
+/** Render live side-by-side city comparison cards on Analytics view. */
+export function renderCityComparison(rows, activeCityId, onPickCity) {
+  const container = $("#city-compare-list");
+  container.replaceChildren();
+  if (!rows.length) {
+    container.append(
+      el("p", "source-caption", "Could not load city comparison right now."),
+    );
+    return;
+  }
+  for (const row of rows) {
+    const cat = category(row.aqi);
+    const btn = el(
+      "button",
+      `compare-card${row.city.id === activeCityId ? " current" : ""}`,
+    );
+    btn.type = "button";
+    btn.append(
+      el("span", "row-key", row.city.name),
+      el("strong", "", Number.isFinite(row.aqi) ? String(row.aqi) : "—"),
+      el("span", `status-tag ${cat.tone}`, cat.label.toUpperCase()),
+    );
+    btn.addEventListener("click", () => onPickCity(row.city.id));
+    container.append(btn);
+  }
 }

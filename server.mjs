@@ -1,5 +1,5 @@
 import http from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   CITIES,
@@ -9,7 +9,7 @@ import {
   isEmergency,
 } from "./public/engine.js";
 
-import { createAirService } from "./lib/air-quality.mjs";
+import { createAirService, searchCities } from "./lib/air-quality.mjs";
 import { generateAnswer } from "./lib/assistant.mjs";
 export { parseAir } from "./lib/air-quality.mjs";
 
@@ -29,6 +29,23 @@ const MIME = {
   svg: "image/svg+xml",
 };
 async function readJSON(req) {
+  if (req.body !== undefined) {
+    if (typeof req.body === "string") {
+      if (Buffer.byteLength(req.body) > 8192)
+        throw Object.assign(new Error("Request too large"), { status: 413 });
+      try {
+        return JSON.parse(req.body);
+      } catch {
+        throw Object.assign(new Error("Invalid JSON"), { status: 400 });
+      }
+    }
+    if (req.body && typeof req.body === "object") {
+      if (Buffer.byteLength(JSON.stringify(req.body)) > 8192)
+        throw Object.assign(new Error("Request too large"), { status: 413 });
+      return req.body;
+    }
+    throw Object.assign(new Error("Invalid JSON"), { status: 400 });
+  }
   let body = "";
   for await (const chunk of req) {
     body += chunk;
@@ -41,7 +58,37 @@ async function readJSON(req) {
     throw Object.assign(new Error("Invalid JSON"), { status: 400 });
   }
 }
-export function createApp({
+function resolveCustomCity(latParam, lonParam, nameParam, zoneParam) {
+  if (latParam === null || lonParam === null) return null;
+  const lat = Number(latParam);
+  const lon = Number(lonParam);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    Math.abs(lat) > 90 ||
+    Math.abs(lon) > 180
+  )
+    return null;
+  const name =
+    typeof nameParam === "string" && nameParam.trim()
+      ? nameParam.trim().slice(0, 80)
+      : `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+  const zone =
+    typeof zoneParam === "string" && /^[A-Za-z_]+\/[A-Za-z0-9_+-]+$/.test(zoneParam)
+      ? zoneParam
+      : "UTC";
+  return {
+    id: `custom:${lat.toFixed(3)},${lon.toFixed(3)}`,
+    name,
+    region: "Custom location",
+    lat,
+    lon,
+    zone,
+    demo: 120,
+  };
+}
+
+export function createHandler({
   fetcher = fetch,
   apiKey = process.env.GEMINI_API_KEY,
   model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
@@ -50,7 +97,8 @@ export function createApp({
 } = {}) {
   const airFor = createAirService(fetcher, clock, stationToken);
   const clients = new Map();
-  return http.createServer(async (req, res) => {
+  const staticCache = new Map();
+  return async (req, res) => {
     const send = (status, data) => {
       res.writeHead(status, {
         "Content-Type": "application/json; charset=utf-8",
@@ -72,15 +120,27 @@ export function createApp({
       const url = new URL(req.url, "http://localhost");
       if (req.method === "GET" && STATIC.has(url.pathname)) {
         const name = STATIC.get(url.pathname);
-        const content = await readFile(new URL(name, PUBLIC));
-        res.writeHead(200, { "Content-Type": MIME[name.split(".").at(-1)] });
-        return res.end(content);
+        const fileUrl = new URL(name, PUBLIC);
+        const info = await stat(fileUrl);
+        let entry = staticCache.get(name);
+        if (!entry || entry.mtimeMs !== info.mtimeMs) {
+          entry = { mtimeMs: info.mtimeMs, content: await readFile(fileUrl) };
+          staticCache.set(name, entry);
+        }
+        res.writeHead(200, {
+          "Content-Type": MIME[name.split(".").at(-1)],
+          "Cache-Control": "public, max-age=60",
+        });
+        return res.end(entry.content);
       }
       if (url.pathname === "/api/health" && req.method === "GET")
         return send(200, { ok: true, ai: Boolean(apiKey), provider: "Gemini", stationData: Boolean(stationToken) });
       if (!url.pathname.startsWith("/api/"))
         return send(404, { error: "Not found" });
-      const ip = req.socket.remoteAddress,
+      const ip =
+          req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+          req.socket?.remoteAddress ||
+          "unknown",
         now = clock();
       for (const [key, value] of clients)
         if (now - value.start > 60000) clients.delete(key);
@@ -92,12 +152,32 @@ export function createApp({
         return send(429, {
           error: "Too many requests. Try again in a minute.",
         });
-      if (url.pathname === "/api/air" && req.method === "GET") {
-        const city = CITIES.find((c) => c.id === url.searchParams.get("city"));
-        if (!city || !["demo", "live", "model"].includes(url.searchParams.get("mode")))
-          return send(400, { error: "Choose a supported city and data mode." });
+      if (url.pathname === "/api/geocode" && req.method === "GET") {
+        const q = (url.searchParams.get("q") || "").trim();
+        if (q.length < 2 || q.length > 80)
+          return send(400, { error: "Enter at least 2 characters to search." });
         try {
-          return send(200, await airFor(city, url.searchParams.get("mode")));
+          return send(200, { results: await searchCities(fetcher, q) });
+        } catch {
+          return send(503, { error: "Location search is temporarily unavailable." });
+        }
+      }
+      if (url.pathname === "/api/air" && req.method === "GET") {
+        const modeParam = url.searchParams.get("mode");
+        const city =
+          CITIES.find((c) => c.id === url.searchParams.get("city")) ||
+          resolveCustomCity(
+            url.searchParams.get("lat"),
+            url.searchParams.get("lon"),
+            url.searchParams.get("name"),
+            url.searchParams.get("zone"),
+          );
+        if (!city || !["demo", "live", "model"].includes(modeParam))
+          return send(400, { error: "Choose a supported city and data mode." });
+        if (city.id.startsWith("custom:") && modeParam === "demo")
+          return send(400, { error: "Demo mode is only available for preset cities." });
+        try {
+          return send(200, await airFor(city, modeParam));
         } catch {
           return send(503, {
             error:
@@ -106,8 +186,10 @@ export function createApp({
         }
       }
       if (url.pathname === "/api/chat" && req.method === "POST") {
+        const proto =
+          req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
         const expectedOrigin =
-          process.env.APP_ORIGIN || `http://${req.headers.host}`;
+          process.env.APP_ORIGIN || `${proto}://${req.headers.host}`;
         if (req.headers.origin && req.headers.origin !== expectedOrigin)
           return send(403, { error: "Origin not allowed" });
         if (req.headers["sec-fetch-site"] === "cross-site")
@@ -115,7 +197,9 @@ export function createApp({
         if (!req.headers["content-type"]?.startsWith("application/json"))
           return send(415, { error: "Use application/json" });
         const body = await readJSON(req);
-        const city = CITIES.find((c) => c.id === body?.city);
+        const city =
+          CITIES.find((c) => c.id === body?.city) ||
+          resolveCustomCity(body?.lat, body?.lon, body?.cityName, body?.zone);
         if (
           !city ||
           !["demo", "live", "model"].includes(body.mode) ||
@@ -189,7 +273,10 @@ export function createApp({
         });
       else res.end();
     }
-  });
+  };
+}
+export function createApp(options) {
+  return http.createServer(createHandler(options));
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3000);
