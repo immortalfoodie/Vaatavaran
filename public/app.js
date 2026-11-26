@@ -70,8 +70,8 @@ const state = {
       ? "custom"
       : CITIES.some((c) => c.id === saved.city)
         ? saved.city
-        : "delhi",
-  mode: ["demo", "live", "model"].includes(saved.mode) ? saved.mode : "live",
+        : "mumbai",
+  mode: ["demo", "live", "model"].includes(saved.mode) ? saved.mode : "model",
   air: { aqi: null, hourly: [] },
   forecastAir: null,
   completed: new Set(),
@@ -291,6 +291,13 @@ async function loadAir() {
     $(".air-card").dataset.state = state.mode;
   } catch (error) {
     if (id === state.requestId) {
+      // If a ground station feed is unavailable or stale, seamlessly switch to live regional model data.
+      if (state.mode === "live") {
+        state.mode = "model";
+        $("#data-mode").value = "model";
+        persist();
+        return loadAir();
+      }
       $(".air-card").dataset.state = "error";
       setStatus(
         `${error.name === "TimeoutError" ? "Live data timed out." : error.message}`,
@@ -636,7 +643,7 @@ function bindEvents() {
     state.profile = normalizeProfile(DEFAULT_PROFILE);
     state.alertAbove = 0;
     state.customCity = null;
-    if (state.cityId === "custom") state.cityId = "delhi";
+    if (state.cityId === "custom") state.cityId = "mumbai";
     populateCitySelect();
     state.completed.clear();
     resetChatMessages();
