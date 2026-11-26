@@ -65,36 +65,47 @@ function applySecurityHeaders(req, res) {
   }
 }
 
+/** Structured HTTP error with explicit status code. */
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
 /** Parse and size-limit JSON request bodies (supports Node streams and Vercel pre-parsed bodies). */
 async function readJsonBody(req) {
   if (req.body !== undefined) {
     if (typeof req.body === "string") {
-      if (Buffer.byteLength(req.body) > MAX_BODY_BYTES)
-        throw Object.assign(new Error("Request too large"), { status: 413 });
+      if (Buffer.byteLength(req.body) > MAX_BODY_BYTES) {
+        throw new HttpError(413, "Request too large");
+      }
       try {
         return JSON.parse(req.body);
       } catch {
-        throw Object.assign(new Error("Invalid JSON"), { status: 400 });
+        throw new HttpError(400, "Invalid JSON");
       }
     }
     if (req.body && typeof req.body === "object") {
-      if (Buffer.byteLength(JSON.stringify(req.body)) > MAX_BODY_BYTES)
-        throw Object.assign(new Error("Request too large"), { status: 413 });
+      if (Buffer.byteLength(JSON.stringify(req.body)) > MAX_BODY_BYTES) {
+        throw new HttpError(413, "Request too large");
+      }
       return req.body;
     }
-    throw Object.assign(new Error("Invalid JSON"), { status: 400 });
+    throw new HttpError(400, "Invalid JSON");
   }
 
   let body = "";
   for await (const chunk of req) {
     body += chunk;
-    if (Buffer.byteLength(body) > MAX_BODY_BYTES)
-      throw Object.assign(new Error("Request too large"), { status: 413 });
+    if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+      throw new HttpError(413, "Request too large");
+    }
   }
   try {
     return JSON.parse(body);
   } catch {
-    throw Object.assign(new Error("Invalid JSON"), { status: 400 });
+    throw new HttpError(400, "Invalid JSON");
   }
 }
 

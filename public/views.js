@@ -25,10 +25,85 @@ const COMMUTE_LABELS = {
   home: "Work from home",
 };
 
+/** Return human-readable display strings for the active air-quality source. */
+function describeSource(mode, air, city) {
+  const kind = air.source?.kind || "model";
+  const hasReading = Number.isFinite(air.aqi);
+
+  if (mode === "demo") {
+    return {
+      heading: hasReading ? "DEMO SCENARIO" : "AIR DATA UNAVAILABLE",
+      typeMain: "Demo ",
+      typeSub: "scenario",
+      badge: hasReading ? "DEMO DATA" : "CHECKING DATA",
+      description: "Illustrative winter-smog scenario · not current conditions",
+      observed: "Demo scenario · switch to live source for current data",
+      warning: "Illustrative scenario. Do not use these numbers as current conditions.",
+    };
+  }
+
+  const formattedObs = air.observedAt
+    ? new Intl.DateTimeFormat("en-IN", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: city.zone,
+      }).format(new Date(air.observedAt))
+    : null;
+  const fetched = air.fetchedAt ? formatTime(city, air.fetchedAt) : "";
+
+  if (kind === "google") {
+    const localNote = air.localIndex
+      ? ` · ${air.localIndex.name}: ${air.localIndex.aqi}`
+      : "";
+    return {
+      heading: hasReading ? "GOOGLE AIR QUALITY (500M)" : "AIR DATA UNAVAILABLE",
+      typeMain: "Google ",
+      typeSub: "500m live",
+      badge: hasReading ? "GOOGLE 500M LIVE" : "CHECKING DATA",
+      description: `Google Air Quality · 500 m sensor-fused grid${localNote}`,
+      observed: formattedObs
+        ? `Google updated ${formattedObs} · fetched ${fetched}`
+        : "No valid reading for the selected source",
+      warning:
+        "US AQI computed from Google Air Quality 500 m PM2.5/PM10 concentrations. Street-level micro-conditions can still vary.",
+    };
+  }
+
+  if (kind === "station") {
+    return {
+      heading: hasReading ? "STATION-REPORTED AQI" : "AIR DATA UNAVAILABLE",
+      typeMain: "Station ",
+      typeSub: "report",
+      badge: hasReading ? "STATION LIVE" : "CHECKING DATA",
+      description: `WAQI · station ${air.source.distanceKm} km from city centre`,
+      observed: formattedObs
+        ? `Station reported ${formattedObs} · fetched ${fetched}`
+        : "No valid reading for the selected source",
+      warning:
+        "PM values are pollutant-specific US AQI, not concentrations (µg/m³). One nearby station, not a city-wide average. Data is provisional.",
+    };
+  }
+
+  return {
+    heading: hasReading ? "REGIONAL FORECAST ESTIMATE" : "AIR DATA UNAVAILABLE",
+    typeMain: "Model ",
+    typeSub: "forecast",
+    badge: hasReading ? "MODEL LIVE" : "CHECKING DATA",
+    description: "Copernicus CAMS global model · ~45 km resolution",
+    observed: formattedObs
+      ? `Model valid ${formattedObs} · fetched ${fetched}`
+      : "No valid reading for the selected source",
+    warning: "Not a street-level sensor reading. Local pollution may differ substantially.",
+  };
+}
+
 function getSourceLabel(mode, kind) {
   if (mode === "demo") return "Demo scenario";
   if (kind === "google") return "Google Air Quality (500m)";
-  return kind === "station" ? "Station-reported AQI" : "Regional forecast estimate";
+  if (kind === "station") return "Station-reported AQI";
+  return "Regional forecast estimate";
 }
 
 /** Coordinate all dashboard sections from current state. */
@@ -97,23 +172,24 @@ function renderHeaderMeta({ air, plan, profile, city }) {
   $("#header-aqi-label").textContent = plan.category.label.toUpperCase();
 }
 
-function renderAirCard({ air, forecastAir, plan, city, mode, station, sourceLabel }) {
+function renderAirCard({ air, forecastAir, plan, city, mode, station }) {
   const hasReading = Number.isFinite(air.aqi);
-  const isGoogle = air.source?.kind === "google";
+  const meta = describeSource(mode, air, city);
 
-  $("#air-heading").textContent = hasReading ? sourceLabel.toUpperCase() : "AIR DATA UNAVAILABLE";
+  $("#air-heading").textContent = meta.heading;
   $("#air-location").textContent = station ? air.source.station : `${city.name} · ${city.region}`;
   $("#aqi").textContent = hasReading ? String(Math.round(air.aqi)) : "—";
   $("#aqi-category").textContent = plan.category.label.toUpperCase();
   $("#aqi-category").className = `status-tag ${plan.category.tone}`;
 
   renderDeltaPill(air, forecastAir, mode);
-  $("#aqi-guidance").textContent =
-    plan.category.level < 0
-      ? "Check local monitoring"
-      : plan.high
-        ? "Take extra care outdoors"
-        : "Stay aware of local conditions";
+  if (plan.category.level < 0) {
+    $("#aqi-guidance").textContent = "Check local monitoring";
+  } else if (plan.high) {
+    $("#aqi-guidance").textContent = "Take extra care outdoors";
+  } else {
+    $("#aqi-guidance").textContent = "Stay aware of local conditions";
+  }
 
   renderSegmentedMeter(air.aqi);
   renderWhoContext(air, station);
@@ -122,73 +198,54 @@ function renderAirCard({ air, forecastAir, plan, city, mode, station, sourceLabe
     ["pm25", station ? air.pollutantAqi?.pm25 : air.pm25],
     ["pm10", station ? air.pollutantAqi?.pm10 : air.pm10],
   ]) {
-    const available = Number.isFinite(value);
-    $("#" + id).replaceChildren(
-      ...(available
-        ? [document.createTextNode(`${Math.round(value)} `), el("small", "", station ? "US AQI" : "µg/m³")]
-        : [el("small", "", "Not reported")]),
-    );
+    if (Number.isFinite(value)) {
+      $("#" + id).replaceChildren(
+        document.createTextNode(`${Math.round(value)} `),
+        el("small", "", station ? "US AQI" : "µg/m³"),
+      );
+    } else {
+      $("#" + id).replaceChildren(el("small", "", "Not reported"));
+    }
   }
 
   $("#data-type").replaceChildren(
-    document.createTextNode(
-      mode === "demo" ? "Demo " : isGoogle ? "Google " : station ? "Station " : "Model ",
-    ),
-    el("small", "", mode === "demo" ? "scenario" : isGoogle ? "500m live" : station ? "report" : "forecast"),
+    document.createTextNode(meta.typeMain),
+    el("small", "", meta.typeSub),
   );
-  $("#data-label").textContent = hasReading
-    ? mode === "demo"
-      ? "DEMO DATA"
-      : isGoogle
-        ? "GOOGLE 500M LIVE"
-        : station
-          ? "STATION LIVE"
-          : "MODEL LIVE"
-    : "CHECKING DATA";
-  $("#data-description").textContent =
-    mode === "demo"
-      ? "Illustrative winter-smog scenario · not current conditions"
-      : isGoogle
-        ? `Google Air Quality · 500 m sensor-fused grid${air.localIndex ? ` · ${air.localIndex.name}: ${air.localIndex.aqi}` : ""}`
-        : station
-          ? `WAQI · station ${air.source.distanceKm} km from city centre`
-          : "Copernicus CAMS global model · ~45 km resolution";
-
-  $("#observed-label").textContent =
-    mode === "demo"
-      ? "Demo scenario · switch to Best Source for live data"
-      : air.observedAt
-        ? `${isGoogle ? "Google updated" : station ? "Station reported" : "Model valid"} ${new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: city.zone }).format(new Date(air.observedAt))} · fetched ${formatTime(city, air.fetchedAt)}`
-        : "No valid reading for the selected source";
-
-  $("#source-warning").textContent =
-    mode === "demo"
-      ? "Illustrative scenario. Do not use these numbers as current conditions."
-      : isGoogle
-        ? "US AQI computed from Google Air Quality 500 m PM2.5/PM10 concentrations. Street-level micro-conditions can still vary."
-        : station
-          ? "PM values are pollutant-specific US AQI, not concentrations (µg/m³). One nearby station, not a city-wide average. Data is provisional."
-          : "Not a street-level sensor reading. Local pollution may differ substantially.";
+  $("#data-label").textContent = meta.badge;
+  $("#data-description").textContent = meta.description;
+  $("#observed-label").textContent = meta.observed;
+  $("#source-warning").textContent = meta.warning;
 
   renderAttribution(air, mode);
   $(".air-card").dataset.tone = plan.category.tone;
 }
 
+function resolveDelta24h(air, forecastAir) {
+  if (Number.isFinite(air.delta24h)) {
+    return { value: air.delta24h, suffix: "VS YESTERDAY" };
+  }
+  if (Number.isFinite(forecastAir?.delta24h)) {
+    return { value: forecastAir.delta24h, suffix: "MODEL 24H" };
+  }
+  return null;
+}
+
 function renderDeltaPill(air, forecastAir, mode) {
-  const delta = Number.isFinite(air.delta24h)
-    ? air.delta24h
-    : Number.isFinite(forecastAir?.delta24h)
-      ? forecastAir.delta24h
-      : null;
   const deltaEl = $("#aqi-delta");
-  if (delta === null || mode === "demo") {
+  const resolved = mode === "demo" ? null : resolveDelta24h(air, forecastAir);
+  if (!resolved) {
     deltaEl.hidden = true;
     return;
   }
   deltaEl.hidden = false;
-  deltaEl.className = `delta-pill${delta > 0 ? " worse" : ""}`;
-  const suffix = Number.isFinite(air.delta24h) ? "VS YESTERDAY" : "MODEL 24H";
-  deltaEl.textContent = delta === 0 ? `SAME ${suffix}` : `${delta > 0 ? "↑" : "↓"} ${Math.abs(delta)} ${suffix}`;
+  deltaEl.className = `delta-pill${resolved.value > 0 ? " worse" : ""}`;
+  if (resolved.value === 0) {
+    deltaEl.textContent = `SAME ${resolved.suffix}`;
+  } else {
+    const arrow = resolved.value > 0 ? "↑" : "↓";
+    deltaEl.textContent = `${arrow} ${Math.abs(resolved.value)} ${resolved.suffix}`;
+  }
 }
 
 function renderWhoContext(air, station) {
@@ -208,15 +265,21 @@ function renderWhoContext(air, station) {
 function renderBriefCard({ plan, outlookPlan, city, station, separateOutlook }) {
   $("#hero-title").textContent = plan.headline;
   $("#hero-summary").textContent = plan.summary;
-  $("#outdoor-summary").textContent =
-    plan.category.level < 0 ? "Check local monitor" : plan.high ? "Move indoors" : "Quieter routes";
+  if (plan.category.level < 0) {
+    $("#outdoor-summary").textContent = "Check local monitor";
+  } else if (plan.high) {
+    $("#outdoor-summary").textContent = "Move indoors";
+  } else {
+    $("#outdoor-summary").textContent = "Quieter routes";
+  }
   $("#window-summary").textContent = plan.high ? "Keep peaks out" : "Ventilate cleanly";
   const best = plan.best || outlookPlan?.best;
-  $("#best-slot").textContent = best
-    ? `${formatTime(city, best.time)} · AQI ${best.aqi}${separateOutlook ? " (model)" : ""}`
-    : station
-      ? "Loading model…"
-      : "Unavailable";
+  if (best) {
+    const suffix = separateOutlook ? " (model)" : "";
+    $("#best-slot").textContent = `${formatTime(city, best.time)} · AQI ${best.aqi}${suffix}`;
+  } else {
+    $("#best-slot").textContent = station ? "Loading model…" : "Unavailable";
+  }
 }
 
 function renderSegmentedMeter(aqi) {
@@ -352,6 +415,12 @@ function renderActivityReadiness(air, profile) {
   }
 }
 
+function barWidthClass(count) {
+  if (count > 6) return "bar-w-85";
+  if (count > 2) return "bar-w-70";
+  return "bar-w-55";
+}
+
 function renderSignals(air, plan, completed) {
   const container = $("#signal-bars");
   container.replaceChildren();
@@ -362,9 +431,9 @@ function renderSignals(air, plan, completed) {
 
   const items = hours.length
     ? [
-        { count: String(modHours).padStart(2, "0"), label: "CAUTION HOURS", width: modHours > 6 ? "bar-w-85" : modHours > 2 ? "bar-w-70" : "bar-w-55", highlight: false },
+        { count: String(modHours).padStart(2, "0"), label: "CAUTION HOURS", width: barWidthClass(modHours), highlight: false },
         { count: String(highHours).padStart(2, "0"), label: "HIGH-RISK HOURS", width: highHours > 0 ? "bar-w-100" : "bar-w-55", highlight: highHours > 0 },
-        { count: String(goodHours).padStart(2, "0"), label: "GOOD-AIR HOURS", width: goodHours > 6 ? "bar-w-85" : "bar-w-55", highlight: false },
+        { count: String(goodHours).padStart(2, "0"), label: "GOOD-AIR HOURS", width: barWidthClass(goodHours), highlight: false },
       ]
     : [
         { count: String(completed.size).padStart(2, "0"), label: "ACTIONS COMPLETED", width: "bar-w-55", highlight: false },

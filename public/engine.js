@@ -344,6 +344,25 @@ export function makePlan(air, input) {
   };
 }
 
+function exerciseVerdict(band, high, severe) {
+  if (severe) return { status: "AVOID", tone: "hazardous" };
+  if (high) return { status: "MOVE INDOORS", tone: "unhealthy" };
+  if (band.level === 0) return { status: "RECOMMENDED", tone: "good" };
+  return { status: "LIGHT ONLY", tone: "moderate" };
+}
+
+function kidsVerdict(level) {
+  if (level >= 3) return { status: "INDOORS", tone: "unhealthy" };
+  if (level >= 2) return { status: "LIMIT TIME", tone: "sensitive" };
+  return { status: "OK WITH CARE", tone: "good" };
+}
+
+function maskVerdict(high, severe) {
+  if (severe) return { status: "STRONGLY ADVISED", tone: "hazardous" };
+  if (high) return { status: "RECOMMENDED", tone: "sensitive" };
+  return { status: "OPTIONAL", tone: "good" };
+}
+
 /** Deterministic daily activity verdicts derived from US AQI and household sensitivity. */
 export function activityReadiness(air, input) {
   const profile = normalizeProfile(input);
@@ -362,8 +381,7 @@ export function activityReadiness(air, input) {
     {
       id: "exercise",
       label: "Outdoor Exercise",
-      status: severe ? "AVOID" : high ? "MOVE INDOORS" : band.level === 0 ? "RECOMMENDED" : "LIGHT ONLY",
-      tone: severe ? "hazardous" : high ? "unhealthy" : band.level === 0 ? "good" : "moderate",
+      ...exerciseVerdict(band, high, severe),
       note: high
         ? "Switch to gentle indoor movement; postpone heavy outdoor cardio."
         : "Prefer quieter streets away from peak traffic.",
@@ -371,11 +389,11 @@ export function activityReadiness(air, input) {
     {
       id: "kids",
       label: "Children & Sensitive",
-      status: band.level >= 3 ? "INDOORS" : band.level >= 2 ? "LIMIT TIME" : "OK WITH CARE",
-      tone: band.level >= 3 ? "unhealthy" : band.level >= 2 ? "sensitive" : "good",
-      note: band.level >= 2
-        ? "Shorten outdoor play and follow any clinician care plan."
-        : "Normal outdoor play is generally fine; watch for symptoms.",
+      ...kidsVerdict(band.level),
+      note:
+        band.level >= 2
+          ? "Shorten outdoor play and follow any clinician care plan."
+          : "Normal outdoor play is generally fine; watch for symptoms.",
     },
     {
       id: "windows",
@@ -389,8 +407,7 @@ export function activityReadiness(air, input) {
     {
       id: "mask",
       label: "N95 / FFP2 Mask",
-      status: severe ? "STRONGLY ADVISED" : high ? "RECOMMENDED" : "OPTIONAL",
-      tone: severe ? "hazardous" : high ? "sensitive" : "good",
+      ...maskVerdict(high, severe),
       note: high
         ? "Use a well-fitting certified N95/FFP2 for unavoidable outdoor trips."
         : "Not typically required unless near heavy traffic or dust.",

@@ -45,6 +45,24 @@ export function formatShortHour(city, time) {
   }).format(new Date(time));
 }
 
+function getForecastLabel(mode, separateOutlook, sourceKind) {
+  if (mode === "demo") return "DEMO OUTLOOK";
+  if (separateOutlook) return "SEPARATE CAMS MODEL";
+  if (sourceKind === "station") return "STATION FEED";
+  return "REGIONAL MODEL";
+}
+
+function resolveActiveHourIndex(selectedHourIndex, bestIdx, count) {
+  if (
+    Number.isInteger(selectedHourIndex) &&
+    selectedHourIndex >= 0 &&
+    selectedHourIndex < count
+  ) {
+    return selectedHourIndex;
+  }
+  return bestIdx >= 0 ? bestIdx : 0;
+}
+
 /** Render the interactive 12-hour stacked-circle dot-matrix chart and hour selector pills. */
 export function renderForecast({
   air,
@@ -62,14 +80,11 @@ export function renderForecast({
   pills.replaceChildren();
   table.replaceChildren();
 
-  $("#forecast-label").textContent =
-    mode === "demo"
-      ? "DEMO OUTLOOK"
-      : separateOutlook
-        ? "SEPARATE CAMS MODEL"
-        : air.source?.kind === "station"
-          ? "STATION FEED"
-          : "REGIONAL MODEL";
+  $("#forecast-label").textContent = getForecastLabel(
+    mode,
+    separateOutlook,
+    air.source?.kind,
+  );
 
   const hours = (air.hourly || []).slice(0, MAX_FORECAST_HOURS);
   if (!hours.length) {
@@ -85,14 +100,7 @@ export function renderForecast({
   }
 
   const bestIdx = hours.findIndex((h) => h.time === plan.best?.time);
-  const activeIdx =
-    Number.isInteger(selectedHourIndex) &&
-    selectedHourIndex >= 0 &&
-    selectedHourIndex < hours.length
-      ? selectedHourIndex
-      : bestIdx >= 0
-        ? bestIdx
-        : 0;
+  const activeIdx = resolveActiveHourIndex(selectedHourIndex, bestIdx, hours.length);
 
   const activeHour = hours[activeIdx];
   $("#inspector-reading").textContent =
@@ -239,9 +247,11 @@ export function renderExposureMatrix(air, city) {
   times.append(el("span", "", ""));
   for (let i = 0; i < MAX_FORECAST_HOURS; i++) {
     const h = hours[i];
-    times.append(
-      el("span", "", h ? (i === 0 ? "NOW" : formatShortHour(city, h.time).replace(/\s*(am|pm)/i, "$1")) : "—"),
-    );
+    let text = "—";
+    if (h) {
+      text = i === 0 ? "NOW" : formatShortHour(city, h.time).replace(/\s*(am|pm)/i, "$1");
+    }
+    times.append(el("span", "", text));
   }
   container.append(times);
 }

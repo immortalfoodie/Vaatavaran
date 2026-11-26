@@ -604,14 +604,16 @@ window.setInterval(refreshAgingContext, POLL_INTERVAL_MS);
 route();
 loadAir();
 
+function liveModeOptionLabel(health) {
+  if (health.googleAir) return "GOOGLE AIR (500M)";
+  if (health.stationData) return "STATION FEED";
+  return "REGIONAL MODEL";
+}
+
 fetch("/api/health")
   .then((r) => r.json())
   .then((data) => {
-    $("#data-mode option[value=live]").textContent = data.googleAir
-      ? "GOOGLE AIR (500M)"
-      : data.stationData
-        ? "STATION FEED"
-        : "REGIONAL MODEL";
+    $("#data-mode option[value=live]").textContent = liveModeOptionLabel(data);
     if (data.googleAir && !state.googleUpgraded && state.mode !== "demo") {
       state.googleUpgraded = true;
       state.mode = "live";
