@@ -769,15 +769,24 @@
       <div class="prose">
         <h3>Data you can trace</h3>
         <p>
-          Demo mode uses fictional, fixed scenarios for ten Indian cities. Live
-          mode requests modelled air quality from
+          When configured, live mode uses the
+          <a
+            href="https://developers.google.com/maps/documentation/air-quality"
+            target="_blank"
+            rel="noreferrer"
+            >Google Air Quality API</a
+          >
+          (500 m sensor-fused grid, converted to US EPA AQI, cached 10 minutes),
+          with optional WAQI ground-station support. Regional forecasts and
+          12-hour outlooks come from
           <a
             href="https://open-meteo.com/en/docs/air-quality-api"
             target="_blank"
             rel="noreferrer"
             >Open-Meteo and Copernicus CAMS</a
-          >, cached for 10 minutes. This is a model estimate, not a street-level
-          sensor reading. Forecasts can change.
+          >
+          (cached 10 minutes). Demo mode uses fictional, fixed scenarios for ten
+          Indian cities. Forecasts can change.
         </p>
         <h3>One scale, clearly labeled</h3>
         <p>

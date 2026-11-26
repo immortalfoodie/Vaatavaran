@@ -4,11 +4,11 @@
 
 Challenge 06 · Urban Air Quality Assistant · [Public repository](https://github.com/immortalfoodie/Vaatavaran)
 
-![Vaatavaran dashboard showing live modelled Delhi air quality, personalized priorities and an hourly outlook](docs/preview.png)
+![Vaatavaran dashboard showing live Mumbai 500m air quality, personalized priorities, activity readiness and 12-hour outlook](docs/preview.png)
 
 ## Run in under a minute
 
-Requires **Node.js 22.9+** (Node 24 recommended) and Git. No dependency installation, framework build, database, or account is needed for the demo.
+Requires **Node.js 22.9+** (Node 24 recommended) and Git. No dependency installation, framework build, database, or account is needed.
 
 ```sh
 git clone https://github.com/immortalfoodie/Vaatavaran.git
@@ -16,10 +16,14 @@ cd Vaatavaran
 npm start
 ```
 
-Open **http://localhost:3000**. With `WAQI_API_TOKEN` configured in `.env`, the default source is a nearby monitoring station via WAQI. Get a free token at https://aqicn.org/data-platform/token/ and restart the server after saving it. Without a station token, the app explicitly labels its Open-Meteo / CAMS regional forecast. Select **Regional forecast** to view that separate model, or **Explore demo** for offline scenarios. Your selected mode is remembered. Failed station requests never silently substitute model or demo readings.
+Open **http://localhost:3000** (defaults to **Mumbai**, with 10 preset Indian cities plus worldwide **Search Any City** via Open-Meteo Geocoding).
+
+- With `GOOGLE_AIR_QUALITY_API_KEY` set in `.env`, the app uses **Google Air Quality API (500 m sensor-fused grid)** converted to US EPA AQI (cached 10 min), paired with a separate Open-Meteo / CAMS 12-hour outlook.
+- With `WAQI_API_TOKEN` set (without Google Air), it supports nearby ground-station observations via WAQI.
+- With no air-quality keys at all, it runs live on **Open-Meteo / Copernicus CAMS** (with 24-hour trend and 12-hour outlook) or offline **Demo scenario** mode.
 
 ```sh
-npm run verify   # syntax, 39 automated tests, and source-size budget
+npm run verify   # syntax, 52 automated tests, and source-size budget
 npm run dev      # restart the server when source files change
 ```
 
@@ -101,15 +105,17 @@ Zero runtime dependencies; a small Node HTTP server and native browser modules k
 
 ```text
 public/index.html       Semantic dashboard, views, settings and chat dialogs
-public/style.css        Responsive visual system, focus and reduced-motion styles
-public/app.js           Interaction controller: navigation, settings, exports and chat
-public/views.js         Stateless rendering of dashboard, actions and forecast
-public/engine.js        Shared pure AQI, planning, impact and local-guide logic
-server.mjs             HTTP routes, static allowlist, input validation and limits
-lib/air-quality.mjs     Live-data parsing, per-city cache and request coalescing
+public/style.css        Clinical biotech responsive visual system
+public/app.js           Interaction controller: navigation, city search, alerts, exports and chat
+public/views.js         Modular stateless renderers & CSP-safe SVG visualizations
+public/engine.js        Shared pure AQI, planning, activity readiness, impact and local-guide logic
+server.mjs              HTTP server & Vercel default handler, static cache, validation and limits
+vercel.json             Vercel security headers configuration
+lib/google-air.mjs      Google Air Quality API (500m) client and US EPA AQI conversion
+lib/station-air.mjs     WAQI ground-station parser and provenance checks
+lib/air-quality.mjs     Open-Meteo/CAMS parsing, 24h delta, geocoding and 10-min cache
 lib/assistant.mjs       Server-only Gemini adapter and grounding instructions
-test/engine.test.mjs    AQI boundaries and recommendation invariants
-test/server.test.mjs    HTTP, security, caching and provider-failure tests
+test/*.test.mjs         52 automated unit, API, security and provider tests
 scripts/check-size.mjs  Source budget check (<10 MB)
 .github/workflows/ci.yml Automated checks on push
 ```
@@ -128,7 +134,7 @@ For Internet hosting, run behind HTTPS, set `HOST=0.0.0.0` and `APP_ORIGIN=https
 
 ## Validation
 
-`npm run verify` runs 39 deterministic tests without external network or paid AI calls. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, severe-smog travel, budget-aware indoor advice, carbon arithmetic, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling and provider fallbacks.
+`npm run verify` runs 52 deterministic tests without external network or paid AI calls. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling and provider fallbacks.
 
 Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persisted checklist state, city switching, assistant responses, literal rendering of HTML-like input, export downloads, impact calculations, simulated live outage and keyboard dialog dismissal. See [validation notes](docs/VALIDATION.md) for final results and limitations.
 
