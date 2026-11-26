@@ -1,3 +1,7 @@
+/**
+ * Vaatavaran client interaction controller.
+ * Manages state, hash routing, API requests, AI chat, and UI events.
+ */
 import {
   renderDashboard,
   renderForecast,
@@ -5,6 +9,13 @@ import {
   renderCityComparison,
   el,
 } from "./views.js";
+import {
+  loadSavedState,
+  saveState,
+  clearSavedState,
+  buildPlanText,
+  downloadPlanText,
+} from "./storage.js";
 import {
   CITIES,
   DEFAULT_PROFILE,
@@ -16,41 +27,22 @@ import {
 } from "./engine.js";
 
 const $ = (selector) => document.querySelector(selector);
-const STORAGE_KEY = "vaatavaran-v1";
 const VALID_PAGES = new Set(["today", "plan", "home", "impact"]);
 const VALID_ACTIONS = new Set(["move", "commute", "home"]);
+const ALERT_THRESHOLDS = new Set([0, 100, 150, 200]);
+const AIR_TIMEOUT_MS = 10_000;
+const CHAT_TIMEOUT_MS = 30_000;
+const STALE_REFRESH_MS = 600_000;
+const POLL_INTERVAL_MS = 60_000;
 
 const PAGE_HEADINGS = {
-  today: [
-    "Today’s Overview",
-    "A clearer picture of your air. A thoughtful plan for your day.",
-  ],
-  plan: [
-    "My Daily Plan",
-    "Practical steps, tailored to your air and your household.",
-  ],
-  home: [
-    "A Healthier Home",
-    "Simple ways to reduce indoor pollution, one room at a time.",
-  ],
-  impact: [
-    "Analytics & Impact",
-    "Hourly exposure intensity, commute emissions, and community choices.",
-  ],
+  today: ["Today’s Overview", "A clearer picture of your air. A thoughtful plan for your day."],
+  plan: ["My Daily Plan", "Practical steps, tailored to your air and your household."],
+  home: ["A Healthier Home", "Simple ways to reduce indoor pollution, one room at a time."],
+  impact: ["Analytics & Impact", "Hourly exposure intensity, commute emissions, and community choices."],
 };
 
-function readStorage() {
-  try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? value
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-const saved = readStorage();
+const saved = loadSavedState();
 const savedCustom =
   saved.customCity &&
   typeof saved.customCity.name === "string" &&
@@ -61,9 +53,7 @@ const savedCustom =
 
 const state = {
   profile: normalizeProfile(saved.profile || DEFAULT_PROFILE),
-  alertAbove: [0, 100, 150, 200].includes(Number(saved.alertAbove))
-    ? Number(saved.alertAbove)
-    : 0,
+  alertAbove: ALERT_THRESHOLDS.has(Number(saved.alertAbove)) ? Number(saved.alertAbove) : 0,
   customCity: savedCustom,
   cityId:
     saved.city === "custom" && savedCustom
@@ -85,15 +75,12 @@ const currentCity = () =>
   state.cityId === "custom" && state.customCity
     ? { id: "custom", ...state.customCity }
     : CITIES.find((c) => c.id === state.cityId) || CITIES[0];
+
 const dayKey = () =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: currentCity().zone }).format(
-    new Date(),
-  );
+  new Intl.DateTimeFormat("en-CA", { timeZone: currentCity().zone }).format(new Date());
 
 if (saved.day === dayKey() && Array.isArray(saved.completed)) {
-  state.completed = new Set(
-    saved.completed.filter((id) => VALID_ACTIONS.has(id)),
-  );
+  state.completed = new Set(saved.completed.filter((id) => VALID_ACTIONS.has(id)));
 }
 
 function setStatus(message, { showRecovery = false } = {}) {
@@ -103,24 +90,18 @@ function setStatus(message, { showRecovery = false } = {}) {
 }
 
 function persist() {
-  try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        profile: state.profile,
-        alertAbove: state.alertAbove,
-        customCity: state.customCity,
-        city: state.cityId,
-        mode: state.mode,
-        googleUpgraded: state.googleUpgraded,
-        day: dayKey(),
-        completed: [...state.completed],
-      }),
-    );
-  } catch {
-    setStatus(
-      "Browser storage is unavailable. Your settings work for this session only.",
-    );
+  const ok = saveState({
+    profile: state.profile,
+    alertAbove: state.alertAbove,
+    customCity: state.customCity,
+    city: state.cityId,
+    mode: state.mode,
+    googleUpgraded: state.googleUpgraded,
+    day: dayKey(),
+    completed: [...state.completed],
+  });
+  if (!ok) {
+    setStatus("Browser storage is unavailable. Your settings work for this session only.");
   }
 }
 
@@ -159,11 +140,8 @@ function populateCitySelect() {
 }
 
 function renderForecastOnly() {
-  const outlookAir = state.air.hourly?.length
-    ? state.air
-    : state.forecastAir || state.air;
-  const separateOutlook =
-    outlookAir !== state.air && Boolean(outlookAir.hourly?.length);
+  const outlookAir = state.air.hourly?.length ? state.air : state.forecastAir || state.air;
+  const separateOutlook = outlookAir !== state.air && Boolean(outlookAir.hourly?.length);
   renderForecast({
     air: outlookAir,
     plan: makePlan(outlookAir, state.profile),
@@ -242,58 +220,35 @@ async function loadAir() {
   $("#refresh").disabled = true;
   $("#today-view").setAttribute("aria-busy", "true");
   $(".air-card").dataset.state = "loading";
-  setStatus(
-    state.mode !== "demo" ? "Fetching the selected air-quality source…" : "",
-  );
+  setStatus(state.mode !== "demo" ? "Fetching the selected air-quality source…" : "");
 
-  state.air =
-    state.mode === "demo"
-      ? demoAir(state.cityId)
-      : { aqi: null, hourly: [], pm25: null, pm10: null };
+  state.air = state.mode === "demo" ? demoAir(state.cityId) : { aqi: null, hourly: [], pm25: null, pm10: null };
   render();
 
   try {
     if (state.mode !== "demo") {
       const response = await fetch(airQueryUrl(city, state.mode), {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(AIR_TIMEOUT_MS),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Air data unavailable");
       if (id !== state.requestId) return;
       state.air = data;
-      if (
-        state.alertAbove > 0 &&
-        Number.isFinite(data.aqi) &&
-        data.aqi >= state.alertAbove
-      ) {
-        setStatus(
-          `Proactive alert: ${city.name} is at US AQI ${data.aqi} (your alert threshold: ${state.alertAbove}+).`,
-        );
-      } else {
-        setStatus("");
-      }
+      const alertTriggered = state.alertAbove > 0 && Number.isFinite(data.aqi) && data.aqi >= state.alertAbove;
+      setStatus(
+        alertTriggered
+          ? `Proactive alert: ${city.name} is at US AQI ${data.aqi} (your alert threshold: ${state.alertAbove}+).`
+          : "",
+      );
       render();
 
-      // Feeds without hourly forecasts (Google Air / WAQI) load the separate CAMS 12h outlook in parallel.
       if (!data.hourly?.length) {
-        fetch(airQueryUrl(city, "model"), {
-          signal: AbortSignal.timeout(10000),
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((modelData) => {
-            if (id !== state.requestId || !modelData?.hourly?.length) return;
-            state.forecastAir = modelData;
-            render();
-          })
-          .catch(() => {
-            /* Keep station view intact if regional outlook is temporarily unreachable. */
-          });
+        fetchSeparateOutlook(id, city);
       }
     }
     $(".air-card").dataset.state = state.mode;
   } catch (error) {
     if (id === state.requestId) {
-      // If a ground station feed is unavailable or stale, seamlessly switch to live regional model data.
       if (state.mode === "live") {
         state.mode = "model";
         $("#data-mode").value = "model";
@@ -301,10 +256,7 @@ async function loadAir() {
         return loadAir();
       }
       $(".air-card").dataset.state = "error";
-      setStatus(
-        `${error.name === "TimeoutError" ? "Live data timed out." : error.message}`,
-        { showRecovery: true },
-      );
+      setStatus(`${error.name === "TimeoutError" ? "Live data timed out." : error.message}`, { showRecovery: true });
     }
   } finally {
     if (id === state.requestId) {
@@ -314,22 +266,32 @@ async function loadAir() {
   }
 }
 
+function fetchSeparateOutlook(requestId, city) {
+  fetch(airQueryUrl(city, "model"), { signal: AbortSignal.timeout(AIR_TIMEOUT_MS) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((modelData) => {
+      if (requestId !== state.requestId || !modelData?.hourly?.length) return;
+      state.forecastAir = modelData;
+      render();
+    })
+    .catch(() => {
+      /* Keep primary reading intact if regional outlook is temporarily unreachable. */
+    });
+}
+
 async function searchAnyCity(query) {
   const container = $("#city-search-results");
   container.replaceChildren(el("p", "source-caption", "Searching locations…"));
   $("#city-search-submit").disabled = true;
   try {
-    const response = await fetch(
-      `/api/geocode?q=${encodeURIComponent(query)}`,
-      { signal: AbortSignal.timeout(8000) },
-    );
+    const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
+      signal: AbortSignal.timeout(8000),
+    });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Search unavailable");
     container.replaceChildren();
     if (!data.results?.length) {
-      container.append(
-        el("p", "source-caption", "No matching cities found. Try another spelling."),
-      );
+      container.append(el("p", "source-caption", "No matching cities found. Try another spelling."));
       return;
     }
     for (const loc of data.results) {
@@ -338,19 +300,7 @@ async function searchAnyCity(query) {
       const left = el("div");
       left.append(el("strong", "", loc.name), el("span", "", loc.region));
       btn.append(left, el("span", "row-key", "SELECT ↗"));
-      btn.addEventListener("click", () => {
-        state.customCity = loc;
-        state.cityId = "custom";
-        if (state.mode === "demo") {
-          state.mode = "model";
-          $("#data-mode").value = "model";
-        }
-        state.completed.clear();
-        populateCitySelect();
-        persist();
-        $("#city-dialog").close();
-        loadAir();
-      });
+      btn.addEventListener("click", () => selectCustomCity(loc));
       container.append(btn);
     }
   } catch (error) {
@@ -360,22 +310,30 @@ async function searchAnyCity(query) {
   }
 }
 
+function selectCustomCity(loc) {
+  state.customCity = loc;
+  state.cityId = "custom";
+  if (state.mode === "demo") {
+    state.mode = "model";
+    $("#data-mode").value = "model";
+  }
+  state.completed.clear();
+  populateCitySelect();
+  persist();
+  $("#city-dialog").close();
+  loadAir();
+}
+
 async function loadCityComparison() {
   const btn = $("#compare-load");
   const container = $("#city-compare-list");
   btn.disabled = true;
-  container.replaceChildren(
-    el("p", "source-caption", "Fetching live regional readings across cities…"),
-  );
-  const sample = CITIES.slice(0, 6);
+  container.replaceChildren(el("p", "source-caption", "Fetching live regional readings across cities…"));
   const settled = await Promise.allSettled(
-    sample.map(async (city) => {
-      const res = await fetch(airQueryUrl(city, "model"), {
-        signal: AbortSignal.timeout(8000),
-      });
+    CITIES.slice(0, 6).map(async (city) => {
+      const res = await fetch(airQueryUrl(city, "model"), { signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error("Unavailable");
-      const data = await res.json();
-      return { city, aqi: data.aqi };
+      return { city, aqi: (await res.json()).aqi };
     }),
   );
   const rows = settled
@@ -393,55 +351,32 @@ async function loadCityComparison() {
   btn.disabled = false;
 }
 
-function buildPlanText(community = false) {
-  const plan = makePlan(state.air, state.profile);
-  const station = state.air.source?.kind === "station";
-  return [
-    "VAATAVARAN · DAILY CLEANER-AIR PLAN",
-    `${currentCity().name} · ${dayKey()}`,
-    station
-      ? "Based on current station guidance. Check the source for the latest numeric reading."
-      : `${state.mode.toUpperCase()} DATA · US AQI ${state.air.aqi ?? "unavailable"} · ${plan.category.label}`,
-    "",
-    ...(community
-      ? [
-          "• Keep school gates idle-free.",
-          "• Combine essential journeys and share rides where practical.",
-          "• Avoid outdoor burning; follow local advisories.",
-          "• Help neighbours identify cleaner indoor public spaces.",
-        ]
-      : plan.cards.flatMap((c, i) => [`${i + 1}. ${c.title}`, c.action, ""])),
-    "",
-    station
-      ? `Station source: ${state.air.source.url || "https://waqi.info"}. Numeric station data is not exported.`
-      : "Demo data is illustrative. Model data is a regional Open-Meteo / CAMS forecast, not a local sensor reading.",
-    "US AQI differs from India AQI. General educational guidance, not medical advice.",
-  ].join("\n");
-}
-
 function exportPlan(community = false) {
-  const url = URL.createObjectURL(
-    new Blob([buildPlanText(community)], { type: "text/plain;charset=utf-8" }),
-  );
-  const a = el("a");
-  a.href = url;
-  a.download = `vaatavaran-${community ? "community" : "daily"}-plan.txt`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-  setStatus(
-    "Your checklist has been downloaded. Household health preferences were excluded.",
-  );
+  const text = buildPlanText({
+    air: state.air,
+    profile: state.profile,
+    city: currentCity(),
+    mode: state.mode,
+    day: dayKey(),
+    community,
+  });
+  downloadPlanText(text, community);
+  setStatus("Your checklist has been downloaded. Household health preferences were excluded.");
 }
 
 async function copyPlan() {
-  const text = buildPlanText(false);
+  const text = buildPlanText({
+    air: state.air,
+    profile: state.profile,
+    city: currentCity(),
+    mode: state.mode,
+    day: dayKey(),
+  });
   try {
     await navigator.clipboard.writeText(text);
-    setStatus(
-      "Daily plan copied to clipboard (health preferences excluded). Ready to share.",
-    );
+    setStatus("Daily plan copied to clipboard (health preferences excluded). Ready to share.");
   } catch {
-    exportPlan(false);
+    downloadPlanText(text, false);
   }
 }
 
@@ -486,22 +421,17 @@ async function ask(question) {
   if (isEmergency(question)) {
     $("#question").value = "";
     addMessage(question, "user", "YOU");
-    addMessage(
-      localAnswer(question, state.air, state.profile),
-      "assistant",
-      "URGENT GUIDANCE · ON DEVICE",
-    );
+    addMessage(localAnswer(question, state.air, state.profile), "assistant", "URGENT GUIDANCE · ON DEVICE");
     return;
   }
   state.chatBusy = true;
   $("#send-question").disabled = true;
   $("#question").value = "";
+
   const city = currentCity();
   const context = {
     city: state.cityId,
-    ...(city.id === "custom"
-      ? { lat: city.lat, lon: city.lon, cityName: city.name, zone: city.zone }
-      : {}),
+    ...(city.id === "custom" ? { lat: city.lat, lon: city.lon, cityName: city.name, zone: city.zone } : {}),
     mode: state.mode,
     profile: { ...state.profile },
     question,
@@ -509,21 +439,17 @@ async function ask(question) {
   };
   const snapshotAir = state.air;
   addMessage(question, "user", "YOU");
-  const waiting = addMessage(
-    "Checking your air and household context…",
-    "assistant pending",
-    "VAATAVARAN",
-  );
+  const waiting = addMessage("Checking your air and household context…", "assistant pending", "VAATAVARAN");
+
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(context),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
     });
     const data = await response.json();
-    if (!response.ok)
-      throw new Error(data.error || "The assistant is unavailable.");
+    if (!response.ok) throw new Error(data.error || "The assistant is unavailable.");
     addMessage(
       (data.notice ? data.notice + "\n\n" : "") + data.answer,
       "assistant",
@@ -537,11 +463,7 @@ async function ask(question) {
         "ON-DEVICE GUIDE · DEMO DATA",
       );
     } else {
-      addMessage(
-        error.message + " Please retry, or explicitly switch to demo mode.",
-        "error",
-        "COULD NOT VERIFY LIVE CONTEXT",
-      );
+      addMessage(error.message + " Please retry, or explicitly switch to demo mode.", "error", "COULD NOT VERIFY LIVE CONTEXT");
     }
   } finally {
     waiting.remove();
@@ -559,13 +481,11 @@ function bindEvents() {
     $("#city-dialog").showModal();
     $("#city-query").focus();
   });
-
   $("#city-search-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const q = $("#city-query").value.trim();
-    if (q.length >= 2) searchAnyCity(q);
+    const query = $("#city-query").value.trim();
+    if (query.length >= 2) searchAnyCity(query);
   });
-
   $("#compare-load")?.addEventListener("click", loadCityComparison);
 
   $("#city").addEventListener("change", () => {
@@ -574,14 +494,12 @@ function bindEvents() {
     persist();
     loadAir();
   });
-
   $("#data-mode").addEventListener("change", () => {
     state.mode = $("#data-mode").value;
     state.completed.clear();
     persist();
     loadAir();
   });
-
   $("#refresh").addEventListener("click", loadAir);
   $("#retry-air")?.addEventListener("click", loadAir);
   $("#switch-to-model")?.addEventListener("click", () => {
@@ -591,17 +509,14 @@ function bindEvents() {
     loadAir();
   });
 
-  for (const id of [
-    "profile-open",
-    "household-edit",
-    "home-profile",
-    "plan-edit-profile",
-  ]) {
+  for (const id of ["profile-open", "household-edit", "home-profile", "plan-edit-profile"]) {
     $("#" + id)?.addEventListener("click", openProfile);
   }
-
   for (const id of ["chat-open", "qa-ask", "plan-ask-ai"]) {
     $("#" + id)?.addEventListener("click", openChat);
+  }
+  for (const id of ["about-open", "sources-open"]) {
+    $("#" + id)?.addEventListener("click", () => $("#about-dialog").showModal());
   }
 
   $("#copy-plan")?.addEventListener("click", copyPlan);
@@ -614,7 +529,6 @@ function bindEvents() {
     const open = $("#top-nav").classList.toggle("open");
     $("#menu-toggle").setAttribute("aria-expanded", String(open));
   });
-
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeMobileNav();
   });
@@ -628,7 +542,7 @@ function bindEvents() {
       purifier: data.has("purifier"),
     });
     const threshold = Number(data.get("alertAbove"));
-    state.alertAbove = [0, 100, 150, 200].includes(threshold) ? threshold : 0;
+    state.alertAbove = ALERT_THRESHOLDS.has(threshold) ? threshold : 0;
     state.completed.clear();
     persist();
     render();
@@ -637,11 +551,7 @@ function bindEvents() {
   });
 
   $("#reset-profile").addEventListener("click", () => {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* No storage available. */
-    }
+    clearSavedState();
     state.profile = normalizeProfile(DEFAULT_PROFILE);
     state.alertAbove = 0;
     state.customCity = null;
@@ -656,28 +566,16 @@ function bindEvents() {
   });
 
   document.querySelectorAll("[data-close]").forEach((button) =>
-    button.addEventListener("click", () =>
-      document.getElementById(button.dataset.close).close(),
-    ),
+    button.addEventListener("click", () => document.getElementById(button.dataset.close).close()),
   );
-
-  for (const id of ["about-open", "sources-open"]) {
-    $("#" + id)?.addEventListener("click", () => $("#about-dialog").showModal());
-  }
-
-  $("#impact-distance").addEventListener("input", (event) =>
-    renderImpact(event.target.value),
-  );
-
+  $("#impact-distance").addEventListener("input", (event) => renderImpact(event.target.value));
   $("#chat-form").addEventListener("submit", (event) => {
     event.preventDefault();
     ask($("#question").value.trim());
   });
-
   document.querySelectorAll("[data-question]").forEach((button) =>
     button.addEventListener("click", () => ask(button.dataset.question)),
   );
-
   window.addEventListener("hashchange", route);
 }
 
@@ -694,7 +592,7 @@ function refreshAgingContext() {
   if (
     state.mode !== "demo" &&
     !$("#refresh").disabled &&
-    (!state.air.fetchedAt || Date.now() - Date.parse(state.air.fetchedAt) > 600000)
+    (!state.air.fetchedAt || Date.now() - Date.parse(state.air.fetchedAt) > STALE_REFRESH_MS)
   ) {
     loadAir();
   }
@@ -702,7 +600,7 @@ function refreshAgingContext() {
 
 bindEvents();
 document.addEventListener("visibilitychange", refreshAgingContext);
-window.setInterval(refreshAgingContext, 60000);
+window.setInterval(refreshAgingContext, POLL_INTERVAL_MS);
 route();
 loadAir();
 
@@ -722,9 +620,7 @@ fetch("/api/health")
       loadAir();
     }
     $("#ai-optin").disabled = !data.ai;
-    $("#ai-availability").textContent = data.ai
-      ? "(Gemini · opt-in)"
-      : "(server key not configured)";
+    $("#ai-availability").textContent = data.ai ? "(Gemini · opt-in)" : "(server key not configured)";
   })
   .catch(() => {
     $("#ai-availability").textContent = "(offline · local guide available)";

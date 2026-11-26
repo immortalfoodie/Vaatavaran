@@ -308,3 +308,24 @@ test("Geocode and custom-coordinate air endpoints validate inputs safely", async
   assert.equal(custom.status, 200);
   assert.equal((await custom.json()).aqi, 180);
 });
+
+test("HTTPS proxy header enables HSTS and health reports Google Air status", async (t) => {
+  const app = await fixture(t, { googleAirKey: "test-google-key" });
+  const healthRes = await fetch(
+    `http://127.0.0.1:${(await app.get("/api/health")).url.match(/:(\d+)/)[1]}/api/health`,
+    { headers: { "x-forwarded-proto": "https" } },
+  );
+  assert.equal(healthRes.status, 200);
+  assert.match(healthRes.headers.get("strict-transport-security"), /max-age=31536000/);
+  const health = await healthRes.json();
+  assert.equal(health.googleAir, true);
+});
+
+test("Modular client assets are allowlisted and served as JavaScript", async (t) => {
+  const app = await fixture(t);
+  for (const asset of ["/app.js", "/charts.js", "/storage.js", "/views.js", "/engine.js"]) {
+    const res = await app.get(asset);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("content-type"), /text\/javascript/);
+  }
+});

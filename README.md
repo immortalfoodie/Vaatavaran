@@ -105,17 +105,19 @@ Zero runtime dependencies; a small Node HTTP server and native browser modules k
 
 ```text
 public/index.html       Semantic dashboard, views, settings and chat dialogs
-public/style.css        Clinical biotech responsive visual system
-public/app.js           Interaction controller: navigation, city search, alerts, exports and chat
-public/views.js         Modular stateless renderers & CSP-safe SVG visualizations
+public/style.css        Clinical biotech responsive visual system (with reduced-motion support)
+public/app.js           Interaction controller: navigation, city search, alerts and chat
+public/views.js         Stateless dashboard card and panel renderers
+public/charts.js        CSP-safe SVG dot-matrix, heatmap and CO2 chart renderers
+public/storage.js       Browser-local persistence and privacy-safe plan export helpers
 public/engine.js        Shared pure AQI, planning, activity readiness, impact and local-guide logic
-server.mjs              HTTP server & Vercel default handler, static cache, validation and limits
+server.mjs              Modular HTTP server & Vercel handler, static cache, validation and limits
 vercel.json             Vercel security headers configuration
 lib/google-air.mjs      Google Air Quality API (500m) client and US EPA AQI conversion
 lib/station-air.mjs     WAQI ground-station parser and provenance checks
 lib/air-quality.mjs     Open-Meteo/CAMS parsing, 24h delta, geocoding and 10-min cache
 lib/assistant.mjs       Server-only Gemini adapter and grounding instructions
-test/*.test.mjs         52 automated unit, API, security and provider tests
+test/*.test.mjs         54 automated unit, API, security and provider tests
 scripts/check-size.mjs  Source budget check (<10 MB)
 .github/workflows/ci.yml Automated checks on push
 ```
