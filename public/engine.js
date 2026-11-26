@@ -54,6 +54,42 @@ export const CITIES = [
     zone: "Asia/Kolkata",
     demo: 48,
   },
+  {
+    id: "hyderabad",
+    name: "Hyderabad",
+    region: "Telangana, India",
+    lat: 17.385,
+    lon: 78.4867,
+    zone: "Asia/Kolkata",
+    demo: 96,
+  },
+  {
+    id: "pune",
+    name: "Pune",
+    region: "Maharashtra, India",
+    lat: 18.5204,
+    lon: 73.8567,
+    zone: "Asia/Kolkata",
+    demo: 112,
+  },
+  {
+    id: "ahmedabad",
+    name: "Ahmedabad",
+    region: "Gujarat, India",
+    lat: 23.0225,
+    lon: 72.5714,
+    zone: "Asia/Kolkata",
+    demo: 158,
+  },
+  {
+    id: "jaipur",
+    name: "Jaipur",
+    region: "Rajasthan, India",
+    lat: 26.9124,
+    lon: 75.7873,
+    zone: "Asia/Kolkata",
+    demo: 184,
+  },
 ];
 export const DEFAULT_PROFILE = {
   sensitive: true,
@@ -118,6 +154,10 @@ export function demoAir(cityId, now = Date.now()) {
       kolkata: 88,
       lucknow: 124,
       chennai: 8,
+      hyderabad: 34,
+      pune: 40,
+      ahmedabad: 68,
+      jaipur: 94,
     }[city.id],
     pm10: {
       delhi: 218,
@@ -126,6 +166,10 @@ export function demoAir(cityId, now = Date.now()) {
       kolkata: 128,
       lucknow: 180,
       chennai: 19,
+      hyderabad: 58,
+      pune: 69,
+      ahmedabad: 114,
+      jaipur: 146,
     }[city.id],
     hourly: offsets.map((offset, i) => ({
       time: new Date(start + i * 3600000).toISOString(),
@@ -153,101 +197,217 @@ export function impact(profile) {
     distance: p.distance,
   };
 }
-export function makePlan(air, profile) {
-  const p = normalizeProfile(profile);
-  const cat = category(air.aqi);
-  const high = cat.level >= 3 || (p.sensitive && cat.level >= 2);
-  const severe = cat.level >= 4;
-  const unknown = cat.level < 0;
-  const cards = [];
-  cards.push({
+function movementCard(profile, risk) {
+  let title = "Choose a quieter route for movement";
+  let action =
+    "Keep away from busy roads. If you are unusually sensitive, shorten activity and watch for symptoms.";
+  let why =
+    "Local traffic and your sensitivity matter, even when city-wide air is better.";
+  if (risk.high) {
+    title = "Bring your movement indoors";
+    action =
+      "Swap the outdoor workout for gentle movement in a cleaner indoor space. Postpone strenuous outdoor activity.";
+    why =
+      risk.category.label +
+      " air calls for less outdoor exposure, especially for sensitive household members.";
+  }
+  if (risk.unknown) {
+    title = "Check local air before heading out";
+    action =
+      "Air data is missing. Check your local monitoring station before outdoor exercise.";
+    why = "Missing data must never be interpreted as clean air.";
+  }
+  return {
     id: "move",
     kind: "Your movement",
-    time: p.outdoor === "morning" ? "Morning" : "Evening",
+    time: profile.outdoor === "morning" ? "Morning" : "Evening",
     icon: "sun",
-    title: unknown
-      ? "Check local air before heading out"
-      : high
-        ? "Bring your movement indoors"
-        : "Choose a quieter route for movement",
-    action: unknown
-      ? "Air data is missing. Check your local monitoring station before outdoor exercise."
-      : high
-        ? "Swap the outdoor workout for gentle movement in a cleaner indoor space. Postpone strenuous outdoor activity."
-        : "Keep away from busy roads. If you are unusually sensitive, shorten activity and watch for symptoms.",
-    why: unknown
-      ? "Missing data must never be interpreted as clean air."
-      : `${cat.label} air${p.sensitive ? " and a sensitive household member" : ""} ${high ? "make reducing inhaled pollution the priority" : "still call for attention to local conditions"}.`,
-    impact: high
+    title,
+    action,
+    why,
+    impact: risk.high
       ? "Less time breathing polluted outdoor air"
       : "Lower exposure to nearby traffic emissions",
-  });
-  cards.push({
+  };
+}
+
+function commuteCard(profile, risk, estimate) {
+  let title = "Make the trip with fewer emissions";
+  let action =
+    "Use public transport or share a ride where feasible. Choose stops away from idling vehicles; do not assume transit air is always cleaner.";
+  if (profile.commute === "car") title = "Try transit for today’s commute";
+  if (profile.commute === "walk" && risk.high) {
+    title = "Swap a long walk for a shorter trip";
+    action =
+      "Consider an enclosed bus or shared ride if available. Avoid a strenuous walking or cycling commute in poor air.";
+  }
+  if (risk.severe) {
+    title = "Postpone nonessential trips";
+    action =
+      "If travel is essential, choose an enclosed option where practical and keep outdoor waiting short. Avoid traffic hotspots.";
+  }
+  if (risk.unknown) {
+    title = "Check local advisories before travel";
+    action =
+      "Current air data is unavailable. Check local monitoring, avoid idling vehicles, and keep unnecessary outdoor waiting short.";
+  }
+  if (profile.commute === "home") {
+    title = "Keep the commute off the calendar";
+    action =
+      "Working from home avoids travel emissions. Take movement breaks indoors when air is poor.";
+  }
+  return {
     id: "commute",
     kind: "Your commute",
     time: "On the way",
     icon: "train",
-    title:
-      p.commute === "home"
-        ? "Keep the commute off the calendar"
-        : severe
-          ? "Postpone nonessential trips"
-          : p.commute === "car"
-            ? "Try transit for today’s commute"
-            : p.commute === "walk" && high
-              ? "Swap a long walk for a shorter trip"
-              : "Make the trip with fewer emissions",
-    action:
-      p.commute === "home"
-        ? "Working from home avoids travel emissions. Take movement breaks indoors when air is poor."
-        : severe
-          ? "If travel is essential, choose an enclosed option where practical and keep outdoor waiting short. Avoid traffic hotspots."
-          : p.commute === "walk" && high
-            ? "Consider an enclosed bus or shared ride if available. Avoid a strenuous walking or cycling commute in poor air."
-            : "Use public transport or share a ride where feasible. Choose stops away from idling vehicles; do not assume transit air is always cleaner.",
-    why: `${p.distance} km total daily travel; ${p.commute === "car" ? "switching a solo car journey can reduce emissions" : "your travel mode and outdoor exposure both matter"}.`,
+    title,
+    action,
+    why:
+      profile.distance +
+      " km total daily travel. Both the journey’s emissions and your outdoor exposure matter.",
     impact:
-      impact(p).savedKg > 0
-        ? `Illustrative car → transit saving: ${impact(p).savedKg} kg CO₂ per day`
+      estimate.savedKg > 0
+        ? "Illustrative car → transit saving: " +
+          estimate.savedKg +
+          " kg CO₂ per day"
         : "Avoid idling and unnecessary motor journeys",
-  });
-  cards.push({
+  };
+}
+
+function homeCard(profile, risk) {
+  let title = "Start with the no-cost indoor fixes";
+  let action =
+    "Damp-dust surfaces and avoid incense, smoking, candles, and aerosol sprays indoors.";
+  if (profile.budget === "flexible") {
+    title = "Consider a correctly sized HEPA cleaner";
+    action =
+      "Choose a particle air cleaner sized for the room; avoid ozone-generating devices.";
+  }
+  if (profile.purifier) {
+    title = "Make one room your cleaner-air space";
+    action =
+      "Run your particle air cleaner according to its instructions in the room you use most.";
+  }
+  const ventilation =
+    risk.high || risk.unknown
+      ? "Keep windows closed during outdoor pollution peaks if it is safe and not too hot; use a cleaner public indoor space if needed."
+      : "Ventilate when outdoor air is cleaner, while considering indoor sources and temperature.";
+  return {
     id: "home",
     kind: "Your home",
     time: "At home",
     icon: "home",
-    title: p.purifier
-      ? "Make one room your cleaner-air space"
-      : p.budget === "low"
-        ? "Start with the no-cost indoor fixes"
-        : "Consider a correctly sized HEPA cleaner",
-    action: `${p.purifier ? "Run your particle air cleaner according to its instructions in the room you use most." : p.budget === "low" ? "Damp-dust surfaces and avoid incense, smoking, candles, and aerosol sprays indoors." : "Choose a particle air cleaner sized for the room; avoid ozone-generating devices."} ${high || unknown ? "Keep windows closed during outdoor pollution peaks if it is safe and not too hot; use a cleaner public indoor space if needed." : "Ventilate when outdoor air is cleaner, while considering indoor sources and temperature."}`,
+    title,
+    action: action + " " + ventilation,
     why: "Reducing indoor sources limits added particles. Outdoor AQI does not measure the air inside your home.",
-    impact: "Fewer indoor particle sources; no invented reduction percentage",
-  });
-  return {
-    category: cat,
-    high,
-    severe,
-    cards,
-    best: bestWindow(air),
-    impact: impact(p),
-    headline: unknown
-      ? "Check the air. Then plan your day."
-      : high
-        ? "A little planning. A cleaner-air day."
-        : "Make room for a better-air day.",
-    summary: unknown
-      ? "Current air data is unavailable. Use local monitoring before making outdoor plans."
-      : high
-        ? "Keep outdoor time short, create a cleaner indoor space, and make essential trips count."
-        : "Enjoy your routine thoughtfully, avoid traffic hotspots, and keep indoor pollution sources low.",
+    impact:
+      "Fewer indoor particle sources, without needing to buy anything first",
   };
 }
+
+/** Decide precautions first, then personalize the three independent actions. */
+export function makePlan(air, input) {
+  const profile = normalizeProfile(input);
+  const band = category(air.aqi);
+  const risk = {
+    category: band,
+    high: band.level >= 3 || (profile.sensitive && band.level >= 2),
+    severe: band.level >= 4,
+    unknown: band.level < 0,
+  };
+  const estimate = impact(profile);
+  let headline = "Make room for a better-air day.";
+  let summary =
+    "Enjoy your routine thoughtfully, avoid traffic hotspots, and keep indoor pollution sources low.";
+  if (risk.high) {
+    headline = "A little planning. A cleaner-air day.";
+    summary =
+      "Keep outdoor time short, create a cleaner indoor space, and make essential trips count.";
+  }
+  if (risk.unknown) {
+    headline = "Check the air. Then plan your day.";
+    summary =
+      "Current air data is unavailable. Use local monitoring before making outdoor plans.";
+  }
+  return {
+    ...risk,
+    cards: [
+      movementCard(profile, risk),
+      commuteCard(profile, risk, estimate),
+      homeCard(profile, risk),
+    ],
+    best: bestWindow(air),
+    impact: estimate,
+    headline,
+    summary,
+  };
+}
+
+/** Deterministic daily activity verdicts derived from US AQI and household sensitivity. */
+export function activityReadiness(air, input) {
+  const profile = normalizeProfile(input);
+  const band = category(air?.aqi);
+  if (band.level < 0) {
+    return [
+      { id: "exercise", label: "Outdoor Exercise", status: "CHECK LOCAL", tone: "unknown", note: "Air data is unavailable. Verify a nearby monitor first." },
+      { id: "kids", label: "Children & Sensitive", status: "CHECK LOCAL", tone: "unknown", note: "Wait for a valid reading before outdoor play." },
+      { id: "windows", label: "Open Windows", status: "USE CAUTION", tone: "unknown", note: "Avoid trapping indoor smoke or heat while checking outdoor air." },
+      { id: "mask", label: "N95 / FFP2 Mask", status: "STANDBY", tone: "unknown", note: "Keep a well-fitting respirator handy if visibility looks hazy." },
+    ];
+  }
+  const high = band.level >= 3 || (profile.sensitive && band.level >= 2);
+  const severe = band.level >= 4;
+  return [
+    {
+      id: "exercise",
+      label: "Outdoor Exercise",
+      status: severe ? "AVOID" : high ? "MOVE INDOORS" : band.level === 0 ? "RECOMMENDED" : "LIGHT ONLY",
+      tone: severe ? "hazardous" : high ? "unhealthy" : band.level === 0 ? "good" : "moderate",
+      note: high
+        ? "Switch to gentle indoor movement; postpone heavy outdoor cardio."
+        : "Prefer quieter streets away from peak traffic.",
+    },
+    {
+      id: "kids",
+      label: "Children & Sensitive",
+      status: band.level >= 3 ? "INDOORS" : band.level >= 2 ? "LIMIT TIME" : "OK WITH CARE",
+      tone: band.level >= 3 ? "unhealthy" : band.level >= 2 ? "sensitive" : "good",
+      note: band.level >= 2
+        ? "Shorten outdoor play and follow any clinician care plan."
+        : "Normal outdoor play is generally fine; watch for symptoms.",
+    },
+    {
+      id: "windows",
+      label: "Open Windows",
+      status: high ? "KEEP CLOSED" : "VENTILATE",
+      tone: high ? "unhealthy" : "good",
+      note: high
+        ? "Keep outdoor peaks out if indoor temperature and cooking fumes allow."
+        : "Cross-ventilate during cleaner hours to refresh indoor air.",
+    },
+    {
+      id: "mask",
+      label: "N95 / FFP2 Mask",
+      status: severe ? "STRONGLY ADVISED" : high ? "RECOMMENDED" : "OPTIONAL",
+      tone: severe ? "hazardous" : high ? "sensitive" : "good",
+      note: high
+        ? "Use a well-fitting certified N95/FFP2 for unavoidable outdoor trips."
+        : "Not typically required unless near heavy traffic or dust.",
+    },
+  ];
+}
+
+export function isEmergency(question) {
+  return /chest pain|cannot breathe|can[’']t breathe|severe breath|blue lips/i.test(
+    question,
+  );
+}
+
 export function localAnswer(question, air, profile) {
   const plan = makePlan(air, profile);
   const q = question.toLowerCase();
-  if (/chest pain|cannot breathe|can't breathe|severe breath|blue lips/.test(q))
+  if (isEmergency(question))
     return "Severe breathing difficulty or chest pain needs urgent medical attention. Contact local emergency services now. This assistant cannot diagnose or manage an emergency.";
   if (/mask|n95|respirator/.test(q))
     return "For unavoidable particle-pollution exposure, a well-fitting certified N95/FFP2 respirator can help reduce inhaled particles, but does not filter all gases. Fit matters; ordinary cloth masks are not equivalent. Respirators may not fit young children. Ask a clinician about suitability for children or people with breathing conditions. Reducing outdoor exposure remains the priority.";
@@ -256,8 +416,8 @@ export function localAnswer(question, air, profile) {
       plan.cards[2].action +
       " Outdoor AQI alone cannot establish safe indoor air; avoid trapping combustion fumes and prioritize heat and immediate safety."
     );
-  if (/school|child|parent|asthma|elder/.test(q))
-    return `For a sensitive household: ${plan.cards[0].action} Follow school/local advisories and a clinician’s existing care plan. Do not change medication based on this app.`;
+  if (/school|child|kids|parent|asthma|elder|senior|pregnan/.test(q))
+    return `For a sensitive household: ${makePlan(air, { ...profile, sensitive: true }).cards[0].action} Follow school/local advisories and a clinician’s existing care plan. Do not change medication based on this app.`;
   if (/commut|travel|bus|car|emission|carbon/.test(q))
     return `${plan.cards[1].action} ${plan.cards[1].impact}. Carbon estimates are illustrative and do not predict a personal health improvement.`;
   if (/purif|indoor|home|plant|incense/.test(q))

@@ -15,7 +15,7 @@ function upstream() {
   };
 }
 async function fixture(t, options = {}) {
-  const server = createApp({ apiKey: "", clock: () => now, ...options });
+  const server = createApp({ apiKey: "", stationToken: "", clock: () => now, ...options });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(
     () =>
@@ -150,14 +150,14 @@ test("GenAI receives server-trusted context and never exposes credentials", asyn
       return {
         ok: true,
         json: async () => ({
-          output: [
+          candidates: [
             {
-              content: [
-                {
-                  type: "output_text",
-                  text: "Keep activity indoors in this demo scenario.",
-                },
-              ],
+              finishReason: "STOP",
+              content: {
+                parts: [
+                  { text: "Keep activity indoors in this demo scenario." },
+                ],
+              },
             },
           ],
         }),
@@ -168,8 +168,8 @@ test("GenAI receives server-trusted context and never exposes credentials", asyn
     await app.post({ ...question, useAI: true, air: { aqi: 0 } })
   ).json();
   assert.equal(data.source, "ai");
-  assert.equal(JSON.parse(payload.input).air.aqi, 286);
-  assert.equal(payload.store, false);
+  assert.equal(JSON.parse(payload.contents[0].parts[0].text).air.aqi, 286);
+  assert.match(payload.systemInstruction.parts[0].text, /Never invent/);
   assert.ok(!JSON.stringify(data).includes("fake-secret"));
 });
 test("Provider failure and empty AI output return labeled local fallback", async (t) => {
@@ -204,4 +204,53 @@ test("Per-client request limits prevent unlimited requests", async (t) => {
   for (let i = 0; i < 60; i++)
     assert.equal((await app.get("/api/air?city=delhi&mode=demo")).status, 200);
   assert.equal((await app.get("/api/air?city=delhi&mode=demo")).status, 429);
+});
+
+test("Gemini free-tier quota failure uses an explicit local fallback", async (t) => {
+  const app = await fixture(t, {
+    apiKey: "fake",
+    fetcher: async () => ({ ok: false, status: 429 }),
+  });
+  const data = await (await app.post({ ...question, useAI: true })).json();
+  assert.equal(data.source, "local");
+  assert.match(data.notice, /quota/);
+});
+
+test("Emergency guidance is available even when live air and AI are unreachable", async (t) => {
+  const app = await fixture(t, {
+    apiKey: "fake",
+    fetcher: () => {
+      throw new Error("Must not call any provider");
+    },
+  });
+  const response = await app.post({
+    ...question,
+    mode: "live",
+    useAI: true,
+    question: "I can’t breathe",
+  });
+  assert.equal(response.status, 200);
+  assert.match((await response.json()).answer, /urgent medical/);
+});
+
+test("Blocked and truncated Gemini responses never appear as complete AI guidance", async (t) => {
+  for (const finishReason of ["SAFETY", "MAX_TOKENS"]) {
+    const app = await fixture(t, {
+      apiKey: "fake",
+      fetcher: async () => ({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              finishReason,
+              content: { parts: [{ text: "Incomplete advice" }] },
+            },
+          ],
+        }),
+      }),
+    });
+    const data = await (await app.post({ ...question, useAI: true })).json();
+    assert.equal(data.source, "local");
+    assert.ok(!data.answer.includes("Incomplete advice"));
+  }
 });

@@ -8,6 +8,7 @@ import {
   impact,
   bestWindow,
   localAnswer,
+  activityReadiness,
   CITIES,
   DEFAULT_PROFILE,
 } from "../public/engine.js";
@@ -129,4 +130,40 @@ test("Local assistant handles emergency, masks, school and ventilation", () => {
     localAnswer("indoor plants?", air, DEFAULT_PROFILE),
     /not a substitute/,
   );
+});
+
+test("A question about a child applies sensitive precautions even with a general profile", () => {
+  assert.match(
+    localAnswer(
+      "Can my child play outdoors?",
+      { aqi: 125 },
+      { sensitive: false },
+    ),
+    /Postpone strenuous/,
+  );
+});
+
+test("Unknown air data never produces an unqualified travel recommendation", () => {
+  assert.match(
+    makePlan({ aqi: null }, { commute: "car" }).cards[1].action,
+    /unavailable/,
+  );
+});
+
+test("Activity readiness reflects AQI severity, sensitivity, and missing data", () => {
+  const unknown = activityReadiness({ aqi: null }, DEFAULT_PROFILE);
+  assert.equal(unknown.length, 4);
+  assert.ok(unknown.every((item) => item.tone === "unknown"));
+
+  const clean = activityReadiness({ aqi: 35 }, { sensitive: false });
+  assert.equal(clean.find((i) => i.id === "exercise").status, "RECOMMENDED");
+  assert.equal(clean.find((i) => i.id === "windows").status, "VENTILATE");
+
+  const sensitiveHigh = activityReadiness({ aqi: 120 }, { sensitive: true });
+  assert.equal(sensitiveHigh.find((i) => i.id === "exercise").status, "MOVE INDOORS");
+  assert.equal(sensitiveHigh.find((i) => i.id === "mask").status, "RECOMMENDED");
+
+  const severe = activityReadiness({ aqi: 260 }, { sensitive: false });
+  assert.equal(severe.find((i) => i.id === "exercise").status, "AVOID");
+  assert.equal(severe.find((i) => i.id === "mask").status, "STRONGLY ADVISED");
 });

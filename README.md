@@ -4,7 +4,7 @@
 
 Challenge 06 · Urban Air Quality Assistant · [Public repository](https://github.com/immortalfoodie/Vaatavaran)
 
-![Vaatavaran dashboard showing a clearly labeled Delhi demo scenario, personalized priorities and an hourly outlook](docs/preview.png)
+![Vaatavaran dashboard showing live modelled Delhi air quality, personalized priorities and an hourly outlook](docs/preview.png)
 
 ## Run in under a minute
 
@@ -16,10 +16,10 @@ cd Vaatavaran
 npm start
 ```
 
-Open **http://localhost:3000**. The app starts in prominently labeled **demo mode**, so evaluation is reproducible even without network access or an API key. Select **Live air data** to fetch modelled conditions. Live-data failures never silently substitute demo readings.
+Open **http://localhost:3000**. With `WAQI_API_TOKEN` configured in `.env`, the default source is a nearby monitoring station via WAQI. Get a free token at https://aqicn.org/data-platform/token/ and restart the server after saving it. Without a station token, the app explicitly labels its Open-Meteo / CAMS regional forecast. Select **Regional forecast** to view that separate model, or **Explore demo** for offline scenarios. Your selected mode is remembered. Failed station requests never silently substitute model or demo readings.
 
 ```sh
-npm run verify   # syntax, 34 automated tests, and source-size budget
+npm run verify   # syntax, 39 automated tests, and source-size budget
 npm run dev      # restart the server when source files change
 ```
 
@@ -40,20 +40,25 @@ The goal is to turn “AQI is high” into **what to change, why it matters, and
 - **Daily checklist:** browser-local progress; resets when household context changes. Plain-text household and community exports omit explicit health preferences.
 - **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support and responsive layouts.
 
-## Enable generative AI
+## Enable Gemini on the free tier
 
-Copy `.env.example` to `.env`, enter your own OpenAI API key **locally**, then restart the server:
+1. Create a key in [Google AI Studio](https://aistudio.google.com/api-keys). Use a project without paid billing if you only want free-tier access.
+2. Copy `.env.example` to `.env` **only if you do not already have one**, then enter your key locally:
 
 ```dotenv
-OPENAI_API_KEY=your-key-here
-OPENAI_MODEL=gpt-4.1-mini
+GEMINI_API_KEY=your-key-here
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-Open **Ask Vaatavaran** and opt into **Use generative AI**. This uses the OpenAI Responses API. Model availability depends on your account; `OPENAI_MODEL` is configurable. The key stays on the server and `.env` is ignored by Git. Never paste real keys into source code or commit them.
+3. Restart `npm start`, reload the page, open **Ask Vaatavaran**, and opt into **Use generative AI**.
 
-AI receives the question, selected city, normalized household preferences, server-fetched air data and the deterministic plan. It is instructed to explain grounded actions without inventing measurements, diagnoses, reductions or citations. Responses are plain text, not interpreted as HTML. The independent rule-based plan remains available because prompt instructions are not a guarantee against incorrect generated advice.
+The server calls Gemini’s `generateContent` API directly, without an SDK or paid fallback provider. The model is configurable. Google currently lists free-tier input/output for this model, subject to account access and quotas; check the [official pricing page](https://ai.google.dev/gemini-api/docs/pricing). The app cannot inspect or change your Google billing settings.
 
-**Without a key, the local guide is functional but is not generative AI.** Provider responses and failure handling are integration-tested with mocks. A paid live AI request requires your own configured key and opt-in; no real key is included in this submission.
+Your key stays on the server; `.env` is ignored by Git. Never paste keys into source files or the assistant. **Free-tier content may be used by Google to improve its products**, so the UI requires explicit opt-in and warns against entering personal details.
+
+Gemini receives the selected city, question, normalized household preferences, server-verified air data and deterministic plan. Quota errors, blocked/truncated answers and provider outages return a labeled local-guide answer. No automatic retries burn through your quota. The rule-based plan remains independent because generated advice can be wrong.
+
+**Without a key, the local guide works but is not generative AI.** Each question is independent. Emergency guidance runs on-device and on the server without waiting for either external provider.
 
 ## Approach and decision logic
 
@@ -77,12 +82,12 @@ City + data mode → validated air data → deterministic recommendation engine
 | Missing live data                   | Show unavailable and local-monitoring guidance     | Unknown air is not clean air                       |
 | AI unavailable / no consent         | Clearly labeled local guide                        | Preserve utility without pretending AI succeeded   |
 
-Categories are **US AQI**, as supplied by Open-Meteo: 0–50, 51–100, 101–150, 151–200, 201–300, 301–500. They are **not India’s National AQI categories**. PM values are displayed in µg/m³ and are not converted into a second incompatible AQI scale.
+Categories use **US AQI**: 0–50, 51–100, 101–150, 151–200, 201–300, 301–500. They are **not India’s National AQI categories**. WAQI pollutant fields are individual AQI subindices, not mass concentrations: station mode displays these separately labeled US AQI values, with “Not reported” for missing values. Model mode displays the supplied hourly PM concentrations in µg/m³; its particulate AQI uses 24-hour averages.
 
 ## Assumptions and honest limitations
 
 1. Demo readings are fictional fixed scenarios, not observations. Their hourly timestamps are relative to the current hour for demonstration.
-2. Live air is a **CAMS model estimate** delivered by Open-Meteo, not a neighbourhood sensor. Local street conditions may differ. The service caches readings for 10 minutes, rejects missing/old current readings, and uses a 12-hour subset of the returned forecast. Recheck local authorities before consequential decisions.
+2. Station mode shows one nearby station, its reporting time, distance from the selected city centre, and agency attribution. It rejects readings older than three hours or stations farther than 75 km; it does not claim a city-wide average. Station numeric data is not cached, archived or exported. Regional forecast mode uses the approximately 45 km CAMS global model, caches responses for 10 minutes and shows a 12-hour outlook. Sources, stations and averaging periods can disagree; model forecasts are never spliced onto station readings. Recheck local authorities before consequential decisions.
 3. Household “sensitivity” is a user-selected precaution, not a diagnosis. The app does not infer conditions, recommend medication, or measure indoor air.
 4. The carbon scenario assumes **0.17 kg CO₂/km for solo car** and **0.06 kg CO₂/passenger-km for transit**. These are explicit illustrative constants, not locally validated emission factors. Distance is total daily travel, not one-way distance. Actual occupancy, power source, traffic and vehicles change results.
 5. Lower emissions and lower personal exposure are different objectives. A transit switch is not always feasible or cleaner for the passenger. Severe air-quality guidance takes priority.
@@ -97,9 +102,12 @@ Zero runtime dependencies; a small Node HTTP server and native browser modules k
 ```text
 public/index.html       Semantic dashboard, views, settings and chat dialogs
 public/style.css        Responsive visual system, focus and reduced-motion styles
-public/app.js           DOM rendering, navigation, settings, exports and chat
+public/app.js           Interaction controller: navigation, settings, exports and chat
+public/views.js         Stateless rendering of dashboard, actions and forecast
 public/engine.js        Shared pure AQI, planning, impact and local-guide logic
-server.mjs             Static allowlist, air proxy/cache, AI gateway, validation
+server.mjs             HTTP routes, static allowlist, input validation and limits
+lib/air-quality.mjs     Live-data parsing, per-city cache and request coalescing
+lib/assistant.mjs       Server-only Gemini adapter and grounding instructions
 test/engine.test.mjs    AQI boundaries and recommendation invariants
 test/server.test.mjs    HTTP, security, caching and provider-failure tests
 scripts/check-size.mjs  Source budget check (<10 MB)
@@ -113,14 +121,14 @@ scripts/check-size.mjs  Source budget check (<10 MB)
 - JSON request limit of 8 KiB, question limit of 1,000 characters, supported-city allowlist and normalized household values.
 - Fixed upstream URLs prevent caller-selected proxy destinations. Network deadlines, in-flight coalescing and per-city caching bound work.
 - In-memory per-IP limits: 60 API requests/minute, with at most 8 AI requests/minute. Forwarded IP headers are deliberately not trusted.
-- Same-origin checks for chat POSTs; no permissive CORS. AI requires explicit per-page user opt-in; `store: false` is sent to OpenAI.
+- Same-origin checks for chat POSTs; no permissive CORS. Gemini requires explicit per-page user opt-in; free-tier provider data-use terms are explained in the UI.
 - No analytics, tracking cookies, database, question logging or client-visible secrets. Preferences and completion are stored only in localStorage; chat stays in memory. **Reset saved data** clears these local settings and the current chat.
 
-For Internet hosting, run behind HTTPS, set `HOST=0.0.0.0` and `APP_ORIGIN=https://your-host.example`, and configure the platform’s `PORT`. Before exposing a paid key publicly, add authentication, persistent/distributed abuse limits and provider spending caps. In-memory rate limits reset on process restart and may group visitors behind a reverse proxy. Provider retention/processing policies still apply to submitted data.
+For Internet hosting, run behind HTTPS, set `HOST=0.0.0.0` and `APP_ORIGIN=https://your-host.example`, and configure the platform’s `PORT`. Before exposing a shared API key publicly, add authentication and persistent/distributed abuse limits to protect the free quota. Keep paid billing disabled for a free-only deployment. In-memory rate limits reset on process restart and may group visitors behind a reverse proxy. Provider retention/processing policies still apply to submitted data.
 
 ## Validation
 
-`npm run verify` runs 34 deterministic tests without external network or paid AI calls. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, severe-smog travel, budget-aware indoor advice, carbon arithmetic, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling and provider fallbacks.
+`npm run verify` runs 39 deterministic tests without external network or paid AI calls. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, severe-smog travel, budget-aware indoor advice, carbon arithmetic, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling and provider fallbacks.
 
 Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persisted checklist state, city switching, assistant responses, literal rendering of HTML-like input, export downloads, impact calculations, simulated live outage and keyboard dialog dismissal. See [validation notes](docs/VALIDATION.md) for final results and limitations.
 
@@ -128,7 +136,7 @@ Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persiste
 
 Try this two-minute walkthrough:
 
-1. Start with Delhi demo: identify the **demo label**, very-unhealthy category and three actionable priorities.
+1. Inspect the live Delhi reading, then switch to Explore demo: identify the **demo label**, very-unhealthy category and three actionable priorities.
 2. Open household settings; select work-from-home, a purifier and a no-cost budget. Watch the recommendations change and inspect **Why this fits your day**.
 3. Switch to Chennai to see a good-air scenario; switch back to Delhi and notice the conservative activity advice.
 4. Ask “Can my child play outside?” and “Should I open the windows?” Check that the response source is labeled.
@@ -141,7 +149,7 @@ Try this two-minute walkthrough:
 - Air-quality data: [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api), using [Copernicus Atmosphere Monitoring Service (CAMS)](https://atmosphere.copernicus.eu/). Follow their attribution and licensing terms for deployment; the public endpoint’s free-use terms may not fit commercial traffic.
 - AQI categories: [AirNow AQI Basics](https://www.airnow.gov/aqi/aqi-basics/).
 - Particle filtration and source control: [US EPA Indoor Air Filtration](https://www.epa.gov/wildfires/indoor-air-filtration) and [AirNow Be Smoke Ready](https://www.airnow.gov/wildfires/be-smoke-ready/). Particle-reduction guidance does not address every urban gas pollutant.
-- AI integration: [OpenAI Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create).
+- AI integration: [Gemini generateContent API](https://ai.google.dev/api/generate-content), [model availability](https://ai.google.dev/gemini-api/docs/models), and [free-tier pricing and data use](https://ai.google.dev/gemini-api/docs/pricing).
 
 ## Submission rules
 
@@ -151,3 +159,7 @@ Try this two-minute walkthrough:
 - No competition submission attempt is made by this application or its tests. Submit the repository link through the competition portal yourself, within the maximum three attempts.
 
 MIT licensed. Original vector illustration and interface; no downloaded image assets.
+
+### Station data
+The optional [WAQI API](https://aqicn.org/api/) requires a server-side token. Display attribution to WAQI and the originating monitoring agencies is retained beside the reading. Data is provisional. Follow the provider's use terms, including restrictions on redistribution, archival, commercial use and requirements for public organizational deployment; a free token is not an unrestricted data licence. The application does not store station readings or include their numeric values in plan exports.
+

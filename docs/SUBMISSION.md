@@ -7,7 +7,7 @@
 - Run `npm run verify`; confirm the source budget remains below 10 MB.
 - Keep `.env`, API keys, generated screenshots and node_modules out of commits.
 - README includes the persona, logic, setup, assumptions, sources and known limitations.
-- To demonstrate actual GenAI, configure a server-side OpenAI API key and opt in within the assistant. Demo/local-guide operation is explicitly labeled and is not a substitute for that demonstration.
+- To demonstrate actual GenAI, configure a server-side Gemini API key and opt in within the assistant. Demo/local-guide operation is explicitly labeled and is not a substitute for that demonstration.
 - Test `npm start` in a fresh clone; no dependency installation is required.
 - Submit the repository link through the challenge portal. **This project does not consume any submission attempts.** The maximum three-attempt rule applies to the portal, not Git commits or local tests.
 

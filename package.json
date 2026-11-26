@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=.env server.mjs",
     "dev": "node --watch --env-file-if-exists=.env server.mjs",
     "test": "node --test",
-    "check": "node --check server.mjs && node --check public/app.js && node --check public/engine.js",
+    "check": "node --check server.mjs && node --check lib/station-air.mjs && node --check lib/air-quality.mjs && node --check lib/assistant.mjs && node --check public/app.js && node --check public/views.js && node --check public/engine.js",
     "verify": "npm run check && npm test && node scripts/check-size.mjs"
   }
 }

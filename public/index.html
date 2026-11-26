@@ -3,480 +3,665 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#193e35" />
+    <meta name="theme-color" content="#23371b" />
     <meta
       name="description"
       content="Vaatavaran turns air quality into a practical, personalized daily plan for your household."
     />
-    <title>Vaatavaran · A little clarity in the air</title>
+    <title>Vaatavaran · Proactive Air Quality Platform</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
     <script type="module" src="/app.js"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to main content</a>
-    <aside class="sidebar">
-      <a class="brand" href="#today" aria-label="Vaatavaran home"
-        ><span class="brand-icon">v<span>•</span></span
-        ><span>vaatavaran<small>A LITTLE CLARITY IN THE AIR</small></span></a
-      >
-      <div class="side-label">YOUR DAILY COMPANION</div>
-      <nav aria-label="Main navigation">
-        <a class="nav-link active" href="#today" data-page="today"
-          ><span aria-hidden="true">◫</span> Today’s overview</a
+
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="#today" aria-label="Vaatavaran home">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>VAATAVARAN</span>
+        </a>
+
+        <label class="search-box">
+          <svg
+            viewBox="0 0 20 20"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <circle cx="9" cy="9" r="6" />
+            <path d="M13.5 13.5L18 18" />
+          </svg>
+          <span class="sr-only">Choose city</span>
+          <select id="city" aria-label="Choose city"></select>
+        </label>
+
+        <nav class="top-nav" id="top-nav" aria-label="Main navigation">
+          <a class="nav-pill active" href="#today" data-page="today"
+            >OVERVIEW</a
+          >
+          <a class="nav-pill" href="#plan" data-page="plan">DAILY PLAN</a>
+          <a class="nav-pill" href="#home" data-page="home">HOME GUIDE</a>
+          <a class="nav-pill" href="#impact" data-page="impact">ANALYTICS</a>
+          <button
+            type="button"
+            class="nav-pill nav-pill-account"
+            id="profile-open"
+          >
+            HOUSEHOLD
+          </button>
+        </nav>
+
+        <button
+          type="button"
+          id="menu-toggle"
+          class="menu-toggle"
+          aria-label="Toggle navigation menu"
+          aria-controls="top-nav"
+          aria-expanded="false"
         >
-        <a class="nav-link" href="#plan" data-page="plan"
-          ><span aria-hidden="true">☷</span> My daily plan</a
-        >
-        <a class="nav-link" href="#home" data-page="home"
-          ><span aria-hidden="true">⌂</span> A healthier home</a
-        >
-        <a class="nav-link" href="#impact" data-page="impact"
-          ><span aria-hidden="true">↗</span> My impact</a
-        >
-      </nav>
-      <div class="side-note">
-        <span class="leaf" aria-hidden="true">❧</span
-        ><strong>Small choices.<br />Shared cleaner skies.</strong>
-        <p>Better for your family.<br />Better for your neighbourhood.</p>
+          <svg
+            viewBox="0 0 20 20"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <path d="M3 5h14M3 10h14M3 15h14" />
+          </svg>
+        </button>
       </div>
-      <button id="profile-open" class="profile-trigger">
-        <span class="avatar">YH</span
-        ><span
-          >Your household<small id="profile-caption"
-            >Personalize your day</small
-          ></span
-        ><span aria-hidden="true">↗</span>
-      </button>
-    </aside>
-    <div class="workspace">
-      <header class="topbar">
-        <div class="breadcrumb">
-          Your air. Your day. <span>A better way.</span>
+    </header>
+
+    <main id="main">
+      <section class="overview-header">
+        <div class="overview-title-block">
+          <p class="eyebrow-row">
+            <span id="date-label">TODAY</span>
+            <span class="sep" aria-hidden="true">·</span>
+            <span id="profile-caption">SENSITIVE HOUSEHOLD</span>
+          </p>
+          <h1 id="page-title">Today’s Overview</h1>
+          <p id="page-subtitle">
+            A clearer picture of your air. A thoughtful plan for your day.
+          </p>
         </div>
-        <div class="top-actions">
-          <label class="location"
-            ><span aria-hidden="true">⌖</span
-            ><span class="sr-only">Choose city</span
-            ><select id="city"></select></label
-          ><button
-            class="icon-button"
+
+        <div class="header-metrics">
+          <div class="stat-pill" id="aqi-stat-pill">
+            <span class="stat-count" id="header-aqi-count">—</span>
+            <span class="stat-label" id="header-aqi-label">US AQI</span>
+          </div>
+          <div class="mode-control">
+            <label class="sr-only" for="data-mode">Air quality data mode</label>
+            <select id="data-mode" aria-label="Air quality data mode">
+              <option value="live">BEST SOURCE</option>
+              <option value="model">REGIONAL MODEL</option>
+              <option value="demo">DEMO SCENARIO</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            id="refresh"
+            class="icon-square"
+            aria-label="Refresh air quality data"
+            title="Refresh air data"
+          >
+            ↻
+          </button>
+          <button
+            type="button"
             id="about-open"
+            class="icon-square"
             aria-label="About data and methodology"
+            title="Sources & methodology"
           >
             i
           </button>
         </div>
-      </header>
-      <main id="main">
-        <div class="page-heading">
-          <div>
-            <p class="eyebrow" id="date-label">YOUR DAILY BREATHING ROOM</p>
-            <h1 id="page-title">Let’s make today a little lighter.</h1>
-            <p id="page-subtitle">
-              A clearer picture of your air. A thoughtful plan for your day.
-            </p>
-          </div>
-          <button class="button secondary" id="share-plan">
-            <span aria-hidden="true">↗</span> Export daily plan
-          </button>
-        </div>
-        <div class="data-bar">
-          <div>
-            <span class="status-dot"></span
-            ><strong id="data-label">Demo scenario</strong
-            ><span id="data-description"
-              >Illustrative data, not current conditions</span
-            >
-          </div>
-          <div class="data-actions">
-            <label class="sr-only" for="data-mode">Air quality data mode</label
-            ><select id="data-mode">
-              <option value="demo">Explore demo</option>
-              <option value="live">Live air data</option></select
-            ><button id="refresh" class="text-button">Refresh ↻</button>
-          </div>
-        </div>
-        <p
-          id="status"
-          class="status-message"
-          role="status"
-          aria-live="polite"
-        ></p>
-        <section id="today-view" class="view">
-          <div class="overview-grid">
-            <section class="air-card card" aria-labelledby="air-heading">
-              <div class="card-heading">
-                <h2 id="air-heading">The air around you</h2>
-                <span class="tiny-label">US AQI</span>
-              </div>
-              <p class="muted" id="air-location">New Delhi, India</p>
-              <div class="aqi-reading">
-                <strong id="aqi">286</strong>
-                <div>
-                  <span id="aqi-category" class="badge very"
-                    >Very unhealthy</span
-                  >
-                  <p id="aqi-guidance">Take extra care outdoors</p>
-                </div>
-              </div>
-              <div class="aqi-scale" aria-hidden="true">
-                <span></span><span></span><span></span><span></span><span></span
-                ><span></span>
-              </div>
-              <div class="scale-labels">
-                <span>Good</span><span>Hazardous</span>
-              </div>
-              <div class="pollutants">
-                <div>
-                  <span>PM2.5</span
-                  ><strong id="pm25">156 <small>µg/m³</small></strong>
-                </div>
-                <div>
-                  <span>PM10</span
-                  ><strong id="pm10">218 <small>µg/m³</small></strong>
-                </div>
-                <div>
-                  <span>Data type</span
-                  ><strong id="data-type">Demo <small>scenario</small></strong>
-                </div>
-              </div>
-              <p class="source-caption" id="observed-label">
-                Illustrative winter-smog scenario
-              </p>
-            </section>
-            <section class="hero-card" aria-labelledby="hero-title">
-              <div class="hero-copy">
-                <span class="hero-kicker"
-                  ><span aria-hidden="true">✧</span> YOUR DAY, REIMAGINED</span
-                >
-                <h2 id="hero-title">
-                  A little planning.<br />A cleaner-air day.
-                </h2>
-                <p id="hero-summary">
-                  Keep outdoor time short, create a cleaner indoor space, and
-                  make essential trips count.
-                </p>
-                <a class="button cream" href="#plan"
-                  >See my daily plan <span aria-hidden="true">↗</span></a
-                >
-              </div>
-              <svg class="city-art" viewBox="0 0 520 300" aria-hidden="true">
-                <defs>
-                  <linearGradient id="sky" x2="0" y2="1">
-                    <stop stop-color="#cbd6b0" />
-                    <stop offset="1" stop-color="#73927b" />
-                  </linearGradient>
-                </defs>
-                <circle cx="385" cy="77" r="57" fill="#dfe0ad" opacity=".9" />
-                <path
-                  d="M0 211Q110 144 218 192T520 154V300H0Z"
-                  fill="#668773"
-                />
-                <g fill="#527662">
-                  <path
-                    d="M54 160h45v112H54zM106 188h31v84h-31zM148 116h58v156h-58zM213 158h42v114h-42zM273 180h52v92h-52zM337 136h39v136h-39zM384 177h58v95h-58zM449 120h37v152h-37z"
-                  />
-                </g>
-                <g fill="#90aa86" opacity=".6">
-                  <path
-                    d="M160 129h9v12h-9zm22 0h9v12h-9zm-22 24h9v12h-9zm22 0h9v12h-9zm-22 24h9v12h-9zm22 0h9v12h-9zM349 148h15v7h-15zm0 21h15v7h-15zM65 173h22v6H65zm0 18h22v6H65z"
-                  />
-                </g>
-                <path
-                  d="M0 249Q134 205 279 247T520 239V300H0Z"
-                  fill="#305b49"
-                />
-                <path
-                  d="M298 300q-13-57 6-103m-5 50q-36-11-37-40 31 2 37 40m2-19q40-7 44-33-33-3-44 33"
-                  stroke="#acbf8e"
-                  stroke-width="5"
-                  fill="#acbf8e"
-                />
-                <path
-                  d="M444 300v-80m0 26q-35-8-37-34 33 0 37 34m0-9q31-7 35-32-29 0-35 32"
-                  stroke="#8da97e"
-                  stroke-width="4"
-                  fill="#8da97e"
-                />
-                <path
-                  d="M0 284q130-27 252 1"
-                  fill="none"
-                  stroke="#b4c19a"
-                  stroke-width="2"
-                  opacity=".5"
-                />
-              </svg>
-              <div class="hero-foot">
-                Made for your city. Adapted to your household.
-              </div>
-            </section>
-          </div>
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">SMALL STEPS, MEANINGFUL CHANGE</p>
-              <h2>Your priorities today</h2>
+      </section>
+
+      <p
+        id="status"
+        class="status-message"
+        role="status"
+        aria-live="polite"
+      ></p>
+
+      <!-- VIEW 1: TODAY'S OVERVIEW (Calm, Spacious 3-Band Layout) -->
+      <section id="today-view" class="view">
+        <!-- Band 1: Air Quality + Daily Brief (2 spacious columns) -->
+        <div class="hero-grid">
+          <section
+            class="panel air-card"
+            data-tone="unknown"
+            data-state="loading"
+            aria-labelledby="air-heading"
+          >
+            <div class="panel-head">
+              <h2 id="air-heading">AIR QUALITY INDEX</h2>
+              <span class="feed-status">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span id="data-label">CHECKING DATA</span>
+              </span>
             </div>
-            <a href="#plan" class="text-link"
-              >View full plan <span aria-hidden="true">→</span></a
-            >
-          </div>
-          <div class="priority-grid" id="priorities"></div>
-          <div class="bottom-grid">
-            <section class="card forecast-card">
-              <div class="card-heading">
-                <h2>A look at the next 12 hours</h2>
-                <span class="tiny-label" id="forecast-label">DEMO OUTLOOK</span>
+
+            <div class="kpi-hero">
+              <div class="kpi-meta">
+                <p class="kpi-location" id="air-location">New Delhi, India</p>
+                <span id="aqi-category" class="status-tag unknown"
+                  >CHECKING AIR</span
+                >
+                <p class="kpi-guidance" id="aqi-guidance">
+                  Fetching the latest air quality data
+                </p>
               </div>
-              <div
-                class="chart"
-                id="forecast"
-                role="img"
-                aria-label="Hourly AQI outlook"
-              ></div>
-              <p id="best-window" class="forecast-note"></p>
-              <details>
-                <summary>Read hourly values</summary>
-                <table>
-                  <caption>
-                    Hourly US AQI, in the selected city’s local time
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Time</th>
-                      <th scope="col">AQI</th>
-                      <th scope="col">Category</th>
-                    </tr>
-                  </thead>
-                  <tbody id="forecast-table"></tbody>
-                </table>
-              </details>
-            </section>
-            <section class="impact-teaser">
-              <span class="eyebrow">GOOD FOR YOU. BETTER FOR EVERYONE.</span
-              ><span class="impact-leaf" aria-hidden="true">❧</span>
-              <h2>Cleaner journeys.<br />A collective difference.</h2>
-              <p id="impact-preview"></p>
-              <a class="text-link" href="#impact">Explore your impact →</a>
-            </section>
+              <div class="kpi-reading">
+                <strong class="kpi-number" id="aqi">—</strong>
+                <span class="kpi-unit">US AQI</span>
+              </div>
+            </div>
+
+            <div
+              class="segmented-meter"
+              id="aqi-meter"
+              aria-hidden="true"
+            ></div>
+            <div class="scale-labels">
+              <span>0 · GOOD</span>
+              <span>150 · UNHEALTHY</span>
+              <span>500 · HAZARDOUS</span>
+            </div>
+
+            <div class="metrics-trio">
+              <div class="metric-cell">
+                <span class="row-key">PM2.5</span>
+                <strong class="row-val" id="pm25">— <small>µg/m³</small></strong>
+              </div>
+              <div class="metric-cell">
+                <span class="row-key">PM10</span>
+                <strong class="row-val" id="pm10">— <small>µg/m³</small></strong>
+              </div>
+              <div class="metric-cell">
+                <span class="row-key">SOURCE TYPE</span>
+                <strong class="row-val" id="data-type"
+                  >Model <small>forecast</small></strong
+                >
+              </div>
+            </div>
+
+            <div class="source-footer">
+              <p class="source-caption" id="observed-label">
+                Connecting to air quality provider
+              </p>
+              <p class="source-caption" id="data-description"></p>
+              <div id="source-attribution" class="source-attribution"></div>
+            </div>
+          </section>
+
+          <section class="panel panel-dark brief-card" aria-label="Daily brief">
+            <div class="panel-head panel-head-dark">
+              <h2>TODAY’S BRIEF</h2>
+              <span class="panel-meta-dark" id="brief-progress"
+                >0 OF 3 DONE</span
+              >
+            </div>
+
+            <div class="brief-copy-block">
+              <h3 class="brief-headline" id="hero-title">
+                A little planning. A cleaner-air day.
+              </h3>
+              <p class="brief-summary" id="hero-summary">
+                Keep outdoor time short, create a cleaner indoor space, and make
+                essential trips count.
+              </p>
+            </div>
+
+            <div class="brief-trio">
+              <div class="brief-stat">
+                <span>OUTDOOR</span>
+                <strong id="outdoor-summary">Checking air…</strong>
+              </div>
+              <div class="brief-stat">
+                <span>WINDOWS</span>
+                <strong id="window-summary">Check indoor sources</strong>
+              </div>
+              <div class="brief-stat">
+                <span>BEST HOUR</span>
+                <strong id="best-slot">—</strong>
+              </div>
+            </div>
+
+            <div class="brief-actions">
+              <button type="button" class="btn btn-light" id="qa-ask">
+                [+] ASK AI ASSISTANT
+              </button>
+              <button type="button" class="btn btn-ghost-dark" id="household-edit">
+                [↗] PERSONALIZE
+              </button>
+              <button type="button" class="btn btn-ghost-dark" id="copy-plan">
+                [↗] COPY PLAN
+              </button>
+              <button type="button" class="btn btn-ghost-dark" id="share-plan">
+                [↓] EXPORT .TXT
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <!-- Band 2: 3 Spacious Interactive Priority Cards -->
+        <section class="band" aria-labelledby="prio-band-title">
+          <div class="band-head">
+            <div>
+              <h2 id="prio-band-title">Your 3 priorities today</h2>
+              <p>Check off actions as you complete them. Synced with your daily plan.</p>
+            </div>
+            <div class="band-head-actions">
+              <span class="stat-pill">
+                <span class="stat-count" id="header-done-count">0</span>
+                <span class="stat-label">OF 3 COMPLETED</span>
+              </span>
+              <a class="panel-link" href="#plan">[FULL PLAN ↗]</a>
+            </div>
           </div>
+          <div class="priority-cards" id="priorities"></div>
         </section>
-        <section id="plan-view" class="view" hidden>
-          <div class="section-heading">
-            <h2>A plan that fits your life</h2>
-            <span id="completion" class="badge good">0 of 3 completed</span>
-          </div>
-          <p class="muted">
-            Check off your actions. Your progress stays on this device for
-            today.
-          </p>
-          <div id="full-plan" class="full-plan"></div>
-          <div class="callout">
-            A lower AQI forecast is not necessarily safe. Follow local
-            advisories and your clinician’s existing care plan.
-          </div>
-        </section>
-        <section id="home-view" class="view" hidden>
-          <div class="home-intro card">
-            <span class="eyebrow">YOUR CLEANER-AIR CORNER</span>
-            <h2>Start with the room you use most.</h2>
-            <p id="home-personal"></p>
-            <button class="button secondary" id="home-profile">
-              Adapt to my home
+
+        <!-- Band 3: Interactive 12-Hour Outlook + Activity Readiness (2 spacious columns) -->
+        <div class="outlook-grid">
+          <section
+            class="panel panel-green forecast-card"
+            aria-labelledby="forecast-head"
+          >
+            <div class="panel-head">
+              <h2 id="forecast-head">12-HOUR AQI OUTLOOK</h2>
+              <span class="panel-meta" id="forecast-label">MODEL FORECAST</span>
+            </div>
+
+            <div class="hour-inspector" id="hour-inspector">
+              <span class="inspector-kicker">SELECTED HOUR</span>
+              <strong id="inspector-reading">Select an hour below to inspect</strong>
+            </div>
+
+            <div
+              class="dot-chart"
+              id="forecast"
+              role="img"
+              aria-label="Hourly AQI outlook"
+            ></div>
+            <div
+              class="hour-pills"
+              id="hour-pills"
+              role="group"
+              aria-label="Inspect specific hour"
+            ></div>
+
+            <p id="best-window" class="forecast-note"></p>
+            <details class="hourly-details">
+              <summary>READ FULL HOURLY TABLE</summary>
+              <table>
+                <caption>
+                  Hourly US AQI, in the selected city’s local time
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">TIME</th>
+                    <th scope="col">AQI</th>
+                    <th scope="col">CATEGORY</th>
+                  </tr>
+                </thead>
+                <tbody id="forecast-table"></tbody>
+              </table>
+            </details>
+          </section>
+
+          <section class="panel readiness-panel" aria-labelledby="readiness-head">
+            <div class="panel-head">
+              <h2 id="readiness-head">CAN I GO OUT? · READINESS</h2>
+              <a class="panel-link" href="#impact">[DEEP DIVE ↗]</a>
+            </div>
+            <p class="panel-subcopy">
+              Quick everyday decisions tailored to your current air quality and
+              household sensitivity.
+            </p>
+            <div class="readiness-list" id="activity-readiness"></div>
+            <p id="source-warning" class="source-warning"></p>
+          </section>
+        </div>
+      </section>
+
+      <!-- VIEW 2: MY DAILY PLAN -->
+      <section id="plan-view" class="view" hidden>
+        <div class="plan-layout">
+          <aside class="panel panel-dark profile-summary-card">
+            <div class="panel-head panel-head-dark">
+              <h2>HOUSEHOLD OVERVIEW</h2>
+            </div>
+            <dl class="profile-dl" id="plan-profile-dl"></dl>
+            <div class="qa-links">
+              <button type="button" class="qa-link" id="plan-edit-profile">
+                [+] EDIT PREFERENCES
+              </button>
+              <button type="button" class="qa-link" id="plan-copy">
+                [↗] COPY PLAN FOR FAMILY
+              </button>
+              <button type="button" class="qa-link" id="plan-ask-ai">
+                [↗] ASK AI ASSISTANT
+              </button>
+            </div>
+          </aside>
+
+          <section class="panel plan-main-panel">
+            <div class="panel-head">
+              <h2>RECOMMENDED DAILY ACTIONS</h2>
+              <span id="completion" class="status-tag good"
+                >0 OF 3 COMPLETED</span
+              >
+            </div>
+            <p class="panel-subcopy">
+              Check off your actions as you go. Progress stays on this device
+              for today.
+            </p>
+            <div id="full-plan" class="full-plan"></div>
+            <div class="callout">
+              A lower AQI forecast is not necessarily safe. Follow local
+              advisories and your clinician’s existing care plan.
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- VIEW 3: A HEALTHIER HOME -->
+      <section id="home-view" class="view" hidden>
+        <div class="home-top-grid">
+          <section class="panel panel-dark home-hero-panel">
+            <div class="panel-head panel-head-dark">
+              <h2>YOUR CLEANER-AIR CORNER</h2>
+              <span class="panel-meta-dark">INDOOR PROTOCOL</span>
+            </div>
+            <h3 class="home-hero-title">Start with the room you use most.</h3>
+            <p id="home-personal" class="brief-summary"></p>
+            <button type="button" class="btn btn-light" id="home-profile">
+              ADAPT TO MY HOME ↗
             </button>
-          </div>
-          <div class="home-grid">
-            <article class="card guide">
-              <span class="step">01</span>
-              <h3>Remove the sources</h3>
-              <p>
-                Skip incense, candles, indoor smoking, and aerosol sprays.
-                Damp-dust rather than stirring up settled dust.
-              </p>
-              <span class="badge good">No-cost first step</span>
-            </article>
-            <article class="card guide">
-              <span class="step">02</span>
-              <h3>Filter thoughtfully</h3>
-              <p>
-                Use a particle air cleaner sized for your room, following the
-                manufacturer’s instructions. Avoid ozone-generating devices.
-                Plants do not replace filtration.
-              </p>
-              <span class="badge moderate">If your budget allows</span>
-            </article>
-            <article class="card guide">
-              <span class="step">03</span>
-              <h3>Time your ventilation</h3>
-              <p>
-                Keep windows closed during outdoor pollution peaks if safe.
-                Ventilate when outdoor air improves. Do not ignore heat,
-                combustion fumes, or other indoor hazards.
-              </p>
-              <span class="badge good">Context matters</span>
-            </article>
-          </div>
-          <div class="callout">
-            <strong>Outdoor data cannot tell us your indoor AQI.</strong> These
-            are source-control practices, not a claim that your home is safe.
-            See
+          </section>
+
+          <section class="panel home-callout-panel">
+            <div class="panel-head">
+              <h2>INDOOR AIR BOUNDARIES</h2>
+              <span class="panel-meta">EPA GUIDANCE</span>
+            </div>
+            <p class="panel-subcopy">
+              <strong>Outdoor data cannot tell us your indoor AQI.</strong>
+              These are evidence-based source-control practices, not a claim
+              that your home is safe.
+            </p>
             <a
+              class="btn btn-dark"
               href="https://www.epa.gov/wildfires/indoor-air-filtration"
               target="_blank"
               rel="noreferrer"
-              >EPA’s filtration guidance ↗</a
-            >.
-          </div>
-        </section>
-        <section id="impact-view" class="view" hidden>
-          <div class="impact-layout">
-            <section class="card impact-calculator">
-              <span class="eyebrow">MAKE THE TRADE-OFF VISIBLE</span>
-              <h2>Your commute, reconsidered.</h2>
-              <p>
-                Compare a solo car trip with public transit. This is an
-                illustrative carbon estimate, not a measured saving.
-              </p>
-              <label for="impact-distance"
-                >Total daily distance
-                <strong id="distance-label">12 km</strong></label
-              ><input
-                type="range"
-                id="impact-distance"
-                min="0"
-                max="100"
-                value="12"
-              />
-              <div class="impact-number">
-                <strong id="carbon-saving">1.32</strong
-                ><span>kg CO₂ / day<br />potentially avoided</span>
+            >
+              READ EPA FILTRATION GUIDE ↗
+            </a>
+          </section>
+        </div>
+
+        <div class="home-grid">
+          <article class="panel guide-card">
+            <div class="panel-head">
+              <h2>STEP 01</h2>
+              <span class="status-tag good">NO-COST FIRST STEP</span>
+            </div>
+            <h3>Remove the sources</h3>
+            <p>
+              Skip incense, candles, indoor smoking, and aerosol sprays.
+              Damp-dust rather than stirring up settled dust.
+            </p>
+          </article>
+          <article class="panel guide-card">
+            <div class="panel-head">
+              <h2>STEP 02</h2>
+              <span class="status-tag moderate">IF BUDGET ALLOWS</span>
+            </div>
+            <h3>Filter thoughtfully</h3>
+            <p>
+              Use a particle air cleaner sized for your room, following the
+              manufacturer’s instructions. Avoid ozone-generating devices.
+              Plants do not replace filtration.
+            </p>
+          </article>
+          <article class="panel guide-card">
+            <div class="panel-head">
+              <h2>STEP 03</h2>
+              <span class="status-tag good">CONTEXT MATTERS</span>
+            </div>
+            <h3>Time your ventilation</h3>
+            <p>
+              Keep windows closed during outdoor pollution peaks if safe.
+              Ventilate when outdoor air improves. Do not ignore heat,
+              combustion fumes, or other indoor hazards.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- VIEW 4: ANALYTICS & IMPACT -->
+      <section id="impact-view" class="view" hidden>
+        <div class="analytics-top-grid">
+          <section class="panel density-panel" aria-labelledby="density-head">
+            <div class="panel-head">
+              <h2 id="density-head">HOURLY EXPOSURE MATRIX</h2>
+              <span class="panel-meta">12H RELATIVE INTENSITY</span>
+            </div>
+            <div class="heatmap-legend" aria-hidden="true">
+              <span><i class="sw sw-0"></i> LOW</span>
+              <span><i class="sw sw-1"></i> MODERATE</span>
+              <span><i class="sw sw-2"></i> HIGH</span>
+              <span><i class="sw sw-3"></i> PEAK</span>
+            </div>
+            <div
+              class="density-grid"
+              id="exposure-matrix"
+              aria-hidden="true"
+            ></div>
+          </section>
+
+          <section class="panel results-panel" aria-labelledby="results-head">
+            <div class="panel-head">
+              <h2 id="results-head">TODAY’S SIGNALS</h2>
+              <span class="panel-meta">HOUR DISTRIBUTION</span>
+            </div>
+            <div class="signal-bars" id="signal-bars"></div>
+            <p id="impact-preview" class="impact-strip"></p>
+          </section>
+        </div>
+
+        <div class="impact-layout">
+          <section class="panel impact-calculator">
+            <div class="panel-head">
+              <h2>EMISSIONS AMPLIFICATION</h2>
+              <span class="panel-meta">COMMUTE SCENARIO</span>
+            </div>
+            <p class="panel-subcopy">
+              Compare a solo car trip with public transit. This is an
+              illustrative carbon estimate, not a measured saving.
+            </p>
+
+            <div class="impact-readout">
+              <div>
+                <span class="mono-caption">ESTIMATED DAILY CO₂ AVOIDED</span>
+                <div class="impact-big">
+                  <strong id="carbon-saving">1.32</strong>
+                  <span>kg CO₂ / day</span>
+                </div>
               </div>
-              <p class="muted" id="carbon-formula"></p>
-              <div class="callout">
-                Assumed factors: solo car 0.17 kg CO₂/km; transit 0.06 kg
-                CO₂/passenger-km. Vehicle, occupancy, fuel and local electricity
-                change actual emissions. These are explicit scenario
-                assumptions.
+              <div class="impact-dist">
+                <label for="impact-distance">
+                  DAILY DISTANCE
+                  <strong id="distance-label">12 km</strong>
+                </label>
+                <input
+                  type="range"
+                  id="impact-distance"
+                  min="0"
+                  max="100"
+                  value="12"
+                />
               </div>
-            </section>
-            <section class="card guide">
-              <span class="eyebrow">A COMMUNITY STARTS WITH US</span>
-              <h2>Make cleaner choices easier.</h2>
-              <ul class="community-list">
-                <li>
-                  <strong>Share a ride, when practical.</strong>
-                  <p>
-                    Coordinate essential trips with neighbours; never trade
-                    health protection for an emissions target.
-                  </p>
-                </li>
-                <li>
-                  <strong>Make school gates idle-free.</strong>
-                  <p>
-                    Switch off parked engines and keep waiting areas away from
-                    traffic.
-                  </p>
-                </li>
-                <li>
-                  <strong>Share the plan, not private details.</strong>
-                  <p>
-                    Export a practical checklist for your household or
-                    community. Health preferences are excluded.
-                  </p>
-                </li>
-              </ul>
-              <button id="community-export" class="button secondary">
-                Export community checklist ↗
-              </button>
-            </section>
-          </div>
-        </section>
-        <footer>
+            </div>
+
+            <div
+              class="amplification-chart"
+              id="impact-chart"
+              aria-hidden="true"
+            ></div>
+
+            <p class="source-caption" id="carbon-formula"></p>
+            <div class="callout">
+              Assumed factors: solo car 0.17 kg CO₂/km; transit 0.06 kg
+              CO₂/passenger-km. Vehicle, occupancy, fuel and local electricity
+              change actual emissions. These are explicit scenario assumptions.
+            </div>
+          </section>
+
+          <section class="panel community-panel">
+            <div class="panel-head">
+              <h2>COMMUNITY PROTOCOL</h2>
+              <span class="panel-meta">SHARED CHOICES</span>
+            </div>
+            <ul class="community-list">
+              <li>
+                <span class="row-key">01 · SHARED JOURNEYS</span>
+                <strong>Share a ride, when practical.</strong>
+                <p>
+                  Coordinate essential trips with neighbours; never trade health
+                  protection for an emissions target.
+                </p>
+              </li>
+              <li>
+                <span class="row-key">02 · IDLE-FREE ZONES</span>
+                <strong>Make school gates idle-free.</strong>
+                <p>
+                  Switch off parked engines and keep waiting areas away from
+                  traffic.
+                </p>
+              </li>
+              <li>
+                <span class="row-key">03 · PRIVACY-FIRST SHARING</span>
+                <strong>Share the plan, not private details.</strong>
+                <p>
+                  Export a practical checklist for your household or community.
+                  Health preferences are excluded.
+                </p>
+              </li>
+            </ul>
+            <button type="button" id="community-export" class="btn btn-dark">
+              EXPORT COMMUNITY CHECKLIST ↗
+            </button>
+          </section>
+        </div>
+      </section>
+
+      <footer class="site-footer">
+        <div class="footer-row">
           <span
-            >vaatavaran <span aria-hidden="true">·</span> Thoughtful choices.
-            Cleaner tomorrows.</span
-          ><button class="text-button" id="sources-open">
-            Sources, privacy & methodology ↗
+            ><strong>VAATAVARAN</strong> · THOUGHTFUL CHOICES. CLEANER
+            TOMORROWS.</span
+          >
+          <button type="button" class="bracket-btn" id="sources-open">
+            [↗] SOURCES, PRIVACY & METHODOLOGY
           </button>
-          <p>
-            General educational guidance, not medical advice. Severe breathing
-            difficulty or chest pain needs urgent local medical help.
-          </p>
-        </footer>
-      </main>
-    </div>
-    <button class="assistant-launch" id="chat-open">
-      <span aria-hidden="true">✧</span> Ask Vaatavaran
-      <span class="assistant-dot"></span>
+        </div>
+        <p class="footer-disclaimer">
+          General educational guidance, not medical advice. Severe breathing
+          difficulty or chest pain needs urgent local medical help.
+        </p>
+      </footer>
+    </main>
+
+    <button type="button" class="assistant-launch" id="chat-open">
+      <span class="assistant-dot" aria-hidden="true"></span>
+      AI ASSISTANT
+      <span aria-hidden="true">↗</span>
     </button>
+
+    <!-- HOUSEHOLD PROFILE DIALOG -->
     <dialog id="profile-dialog" aria-labelledby="profile-title">
       <form id="profile-form">
-        <div class="dialog-heading">
-          <div>
-            <span class="eyebrow">MADE FOR YOUR EVERYDAY</span>
-            <h2 id="profile-title">Your household, your plan.</h2>
-          </div>
+        <div class="panel-head">
+          <h2 id="profile-title">HOUSEHOLD PREFERENCES</h2>
           <button
             type="button"
-            class="icon-button"
+            class="icon-square"
             data-close="profile-dialog"
             aria-label="Close household settings"
           >
             ×
           </button>
         </div>
-        <p class="muted">
+        <p class="panel-subcopy">
           Saved only on this device. No names or precise addresses needed.
         </p>
-        <label class="check-row"
-          ><input type="checkbox" name="sensitive" /> Plan for children, older
-          adults, or someone sensitive to pollution</label
-        >
+        <label class="check-row">
+          <input type="checkbox" name="sensitive" />
+          Plan for children, older adults, or someone sensitive to pollution
+        </label>
         <div class="form-grid">
-          <label
-            >Usual commute<select name="commute">
+          <label>
+            USUAL COMMUTE
+            <select name="commute">
               <option value="car">Solo car</option>
               <option value="transit">Public transit</option>
               <option value="walk">Walking / cycling</option>
               <option value="home">Work from home</option>
-            </select></label
-          ><label
-            >Total daily distance (km)<input
-              name="distance"
-              type="number"
-              min="0"
-              max="100"
-              required /></label
-          ><label
-            >Indoor improvements budget<select name="budget">
+            </select>
+          </label>
+          <label>
+            TOTAL DAILY DISTANCE (KM)
+            <input name="distance" type="number" min="0" max="100" required />
+          </label>
+          <label>
+            INDOOR IMPROVEMENTS BUDGET
+            <select name="budget">
               <option value="low">Prioritize no-cost options</option>
               <option value="flexible">Open to a filter purchase</option>
-            </select></label
-          ><label
-            >Preferred exercise time<select name="outdoor">
+            </select>
+          </label>
+          <label>
+            PREFERRED EXERCISE TIME
+            <select name="outdoor">
               <option value="morning">Morning</option>
               <option value="evening">Evening</option>
-            </select></label
-          >
+            </select>
+          </label>
         </div>
-        <label class="check-row"
-          ><input type="checkbox" name="purifier" /> We have a particle air
-          purifier</label
-        >
+        <label class="check-row">
+          <input type="checkbox" name="purifier" />
+          We have a particle air purifier
+        </label>
         <div class="dialog-footer">
-          <button type="button" id="reset-profile" class="text-button">
-            Reset saved data</button
-          ><button class="button primary" type="submit">
-            Update my plan →
+          <button type="button" id="reset-profile" class="bracket-btn">
+            [×] RESET SAVED DATA
           </button>
+          <button class="btn btn-dark" type="submit">UPDATE MY PLAN →</button>
         </div>
       </form>
     </dialog>
+
+    <!-- METHODOLOGY DIALOG -->
     <dialog id="about-dialog" aria-labelledby="about-title">
-      <div class="dialog-heading">
-        <h2 id="about-title">A clear view of our assumptions.</h2>
+      <div class="panel-head">
+        <h2 id="about-title">DATA & METHODOLOGY</h2>
         <button
-          class="icon-button"
+          type="button"
+          class="icon-square"
           data-close="about-dialog"
           aria-label="Close methodology"
         >
@@ -486,7 +671,7 @@
       <div class="prose">
         <h3>Data you can trace</h3>
         <p>
-          Demo mode uses fictional, fixed scenarios for six Indian cities. Live
+          Demo mode uses fictional, fixed scenarios for ten Indian cities. Live
           mode requests modelled air quality from
           <a
             href="https://open-meteo.com/en/docs/air-quality-api"
@@ -534,42 +719,48 @@
           Settings and daily completion are stored in your browser. Chat is kept
           only in page memory. With AI enabled and your opt-in, your question,
           selected city, air data and household preferences are sent through our
-          server to OpenAI. Do not include identifying or medical details. No
-          API key reaches the browser. AI can be wrong; the rule-based plan
+          server to Google Gemini. Free-tier content may be used by Google to
+          improve its products. Do not include identifying or medical details.
+          No API key reaches the browser. AI can be wrong; the rule-based plan
           remains independently available.
         </p>
         <h3>Deployment limits</h3>
         <p>
           The public demo can run without any AI key. An Internet deployment
-          with paid AI should add user authentication, HTTPS, provider spending
-          caps and an external rate limiter. This app’s in-memory limits reset
-          on restart.
+          with a shared AI key should add user authentication, HTTPS and an
+          external rate limiter to protect the free quota. This app’s in-memory
+          limits reset on restart.
         </p>
       </div>
     </dialog>
+
+    <!-- AI ASSISTANT DIALOG -->
     <dialog id="chat-dialog" class="chat-dialog" aria-labelledby="chat-title">
-      <div class="dialog-heading">
-        <div>
-          <span class="eyebrow">A LITTLE GUIDANCE GOES A LONG WAY</span>
-          <h2 id="chat-title">
-            Ask Vaatavaran <span aria-hidden="true">✧</span>
-          </h2>
+      <div class="panel-head">
+        <h2 id="chat-title">AI ASSISTANT</h2>
+        <div class="dialog-head-actions">
+          <button type="button" class="bracket-btn" id="chat-clear">
+            [×] CLEAR
+          </button>
+          <button
+            type="button"
+            class="icon-square"
+            data-close="chat-dialog"
+            aria-label="Close assistant"
+          >
+            ×
+          </button>
         </div>
-        <button
-          class="icon-button"
-          data-close="chat-dialog"
-          aria-label="Close assistant"
-        >
-          ×
-        </button>
       </div>
       <p id="chat-context" class="chat-context"></p>
-      <label class="check-row ai-consent"
-        ><input id="ai-optin" type="checkbox" disabled /> Use generative AI
-        <span id="ai-availability">(checking configuration…)</span></label
-      >
+      <label class="check-row ai-consent">
+        <input id="ai-optin" type="checkbox" disabled />
+        Use generative AI
+        <span id="ai-availability">(checking configuration…)</span>
+      </label>
       <p class="privacy-note">
-        Opt-in sends your question, city and preferences to OpenAI. Avoid
+        Opt-in sends your question, city and preferences to Google Gemini.
+        Free-tier content may be used by Google to improve its products. Avoid
         personal details. Leave off to use the local guide.
       </p>
       <div
@@ -586,30 +777,39 @@
           </p>
         </div>
       </div>
-      <div class="suggestions">
-        <button data-question="Can my child play outside today?">
-          School & play</button
-        ><button data-question="Should I open the windows?">
-          Open windows?</button
-        ><button data-question="How can I improve indoor air on a low budget?">
-          Indoor air
+      <div class="suggestions" id="chat-suggestions">
+        <button type="button" data-question="Can my child play outside today?">
+          SCHOOL & PLAY
+        </button>
+        <button type="button" data-question="Should I open the windows?">
+          OPEN WINDOWS?
+        </button>
+        <button type="button" data-question="Which mask should I wear today?">
+          MASK ADVICE
+        </button>
+        <button
+          type="button"
+          data-question="How can I improve indoor air on a low budget?"
+        >
+          INDOOR AIR
         </button>
       </div>
-      <form id="chat-form">
-        <label class="sr-only" for="question">Ask about air quality</label
-        ><input
+      <form id="chat-form" class="chat-form">
+        <label class="sr-only" for="question">Ask about air quality</label>
+        <input
           id="question"
           maxlength="1000"
           required
-          placeholder="Ask about your day…"
+          placeholder="TYPE A MESSAGE…"
           autocomplete="off"
-        /><button
-          class="button primary"
+        />
+        <button
+          class="send-circle"
           id="send-question"
           type="submit"
           aria-label="Send question"
         >
-          ↑
+          ➤
         </button>
       </form>
       <p class="privacy-note">
@@ -617,11 +817,12 @@
         current context.
       </p>
     </dialog>
-    <noscript
-      ><p class="callout">
+
+    <noscript>
+      <p class="callout">
         Enable JavaScript to use the personalized assistant. General air-quality
         guidance is available at airnow.gov.
-      </p></noscript
-    >
+      </p>
+    </noscript>
   </body>
 </html>
