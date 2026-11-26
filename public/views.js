@@ -67,7 +67,7 @@ function describeSource(mode, air, city) {
         ? `Google updated ${formattedObs} · fetched ${fetched}`
         : "No valid reading for the selected source",
       warning:
-        "US AQI computed from Google Air Quality 500 m PM2.5/PM10 concentrations. Street-level micro-conditions can still vary.",
+        "Official US EPA NowCast AQI from Google Air Quality (500 m sensor-fused grid). Hourly PM2.5/PM10 shown separately.",
     };
   }
 
