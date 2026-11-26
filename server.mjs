@@ -278,6 +278,10 @@ export function createHandler({
 export function createApp(options) {
   return http.createServer(createHandler(options));
 }
+let defaultHandler;
+export default function handler(req, res) {
+  return (defaultHandler ||= createHandler())(req, res);
+}
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3000);
   createApp().listen(port, process.env.HOST || "127.0.0.1", () =>
