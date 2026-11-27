@@ -78,11 +78,13 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 
 3. Restart `npm start`, reload the page, open **Ask Vaatavaran**, and opt into **Use generative AI**.
 
+**Optional fallback key.** Add `GEMINI_FALLBACK_API_KEY` to `.env` (ideally from a different Google Cloud project, since free-tier quotas are per project). The primary key is always tried first; when Gemini rejects it with any HTTP error (rate limit or quota `429`, invalid key `400`, revoked or restricted key `401`/`403`, or a server error), the same request is retried once with the fallback key. Network errors, timeouts and blocked answers are not retried, so a request never waits on two deadlines. The "quota exhausted" notice appears only when every key is out of quota. Keys stay server-side and `/api/health` never reveals how many are configured.
+
 The server calls Gemini’s `generateContent` API directly, without an SDK or paid fallback provider. The model is configurable. Google currently lists free-tier input/output for this model, subject to account access and quotas; check the [official pricing page](https://ai.google.dev/gemini-api/docs/pricing). The app cannot inspect or change your Google billing settings.
 
 Your key stays on the server; `.env` is ignored by Git. Never paste keys into source files or the assistant. **Free-tier content may be used by Google to improve its products**, so the UI requires explicit opt-in and warns against entering personal details.
 
-Gemini receives the selected city, question, normalized household preferences, server-verified air data and deterministic plan. For **Plan my day** it receives the city, whether the household is sensitive, and each activity's name, duration and rule-checked time options; it must answer in the `responseJsonSchema` format and may only pick from those options. Quota errors, blocked/truncated answers and provider outages return a labeled local-guide answer. No automatic retries burn through your quota. The rule-based plan remains independent because generated advice can be wrong.
+Gemini receives the selected city, question, normalized household preferences, server-verified air data and deterministic plan. For **Plan my day** it receives the city, whether the household is sensitive, and each activity's name, duration and rule-checked time options; it must answer in the `responseJsonSchema` format and may only pick from those options. Quota errors, blocked/truncated answers and provider outages return a labeled local-guide answer. Apart from one attempt with the optional fallback key, there are no automatic retries, so nothing burns through your quota. The rule-based plan remains independent because generated advice can be wrong.
 
 **Without a key, the local guide works but is not generative AI.** Each question is independent. Emergency guidance runs on-device and on the server without waiting for either external provider.
 

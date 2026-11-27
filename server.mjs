@@ -212,7 +212,7 @@ function rejectUntrustedPost(req) {
  * @typedef {object} ChatDeps
  * @property {typeof fetch} fetcher
  * @property {AirResolver} airFor
- * @property {string | undefined} apiKey
+ * @property {string[]} apiKeys Gemini keys in priority order (empty: AI disabled).
  * @property {string} model
  */
 
@@ -270,12 +270,12 @@ function parseChatRequest(body) {
  * @param {ChatDeps} deps
  * @returns {Promise<{ answer: string, source: "ai" | "local", mode?: DataMode, notice?: string }>}
  */
-async function answerWithAi(chat, air, { fetcher, apiKey = "", model }) {
+async function answerWithAi(chat, air, { fetcher, apiKeys, model }) {
   const { city, profile, question } = chat;
   try {
     const answer = await generateAnswer({
       fetcher,
-      apiKey,
+      apiKeys,
       model,
       context: { city: city.name, air, profile, plan: makePlan(air, profile), question },
     });
@@ -321,7 +321,7 @@ async function handleChat(req, res, consumeAi, deps) {
     });
   }
 
-  if (!deps.apiKey || !chat.useAI) {
+  if (!deps.apiKeys.length || !chat.useAI) {
     const answer = localAnswer(question, air, profile);
     return sendJson(res, 200, { answer, source: "local", mode: air.mode });
   }
@@ -355,7 +355,9 @@ async function handlePlanDay(req, res, consumeAi, planForDay) {
 /**
  * @typedef {object} HandlerOptions
  * @property {typeof fetch} [fetcher] Injected fetch (mocked in tests).
- * @property {string} [apiKey] Gemini API key.
+ * @property {string} [apiKey] Primary Gemini API key.
+ * @property {string} [fallbackApiKey] Second Gemini key, used when the primary is rate-limited,
+ *   out of quota, invalid or revoked.
  * @property {string} [model] Gemini model name.
  * @property {string} [stationToken] WAQI token.
  * @property {string} [googleAirKey] Google Air Quality API key.
@@ -370,6 +372,7 @@ async function handlePlanDay(req, res, consumeAi, planForDay) {
 export function createHandler({
   fetcher = fetch,
   apiKey = process.env.GEMINI_API_KEY,
+  fallbackApiKey = process.env.GEMINI_FALLBACK_API_KEY,
   model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
   stationToken = process.env.WAQI_API_TOKEN || "",
   googleAirKey = process.env.GOOGLE_AIR_QUALITY_API_KEY || "",
@@ -377,7 +380,9 @@ export function createHandler({
 } = {}) {
   const airFor = createAirService(fetcher, clock, stationToken, googleAirKey);
   const limiter = createRateLimiter(clock);
-  const planForDay = createDayPlanner({ airFor, fetcher, apiKey, model });
+  /** Gemini keys in priority order; blanks and duplicates are dropped. */
+  const apiKeys = [...new Set([apiKey, fallbackApiKey].flatMap((key) => (key ? [key] : [])))];
+  const planForDay = createDayPlanner({ airFor, fetcher, apiKeys, model });
   /** @type {Map<string, { mtimeMs: number, content: Buffer }>} */
   const staticCache = new Map();
 
@@ -396,7 +401,7 @@ export function createHandler({
     "POST /api/plan-day": (req, res, _url, bucket) =>
       handlePlanDay(req, res, () => limiter.consumeAi(bucket), planForDay),
     "POST /api/chat": (req, res, _url, bucket) =>
-      handleChat(req, res, () => limiter.consumeAi(bucket), { fetcher, airFor, apiKey, model }),
+      handleChat(req, res, () => limiter.consumeAi(bucket), { fetcher, airFor, apiKeys, model }),
   };
 
   /**
@@ -411,7 +416,7 @@ export function createHandler({
     if (url.pathname === "/api/health" && req.method === "GET") {
       return sendJson(res, 200, {
         ok: true,
-        ai: Boolean(apiKey),
+        ai: apiKeys.length > 0,
         provider: "Gemini",
         stationData: Boolean(stationToken),
         googleAir: Boolean(googleAirKey),

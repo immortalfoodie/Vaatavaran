@@ -131,7 +131,7 @@ test("Planner service: rules without consent, structured Gemini request with con
       steps: [{ id: "a1", startTime: iso(15), reason: "Cleanest hour.", tradeoff: "Afternoon." }],
     });
   };
-  const planForDay = createDayPlanner({ airFor, fetcher, apiKey: "k", model: "gemini-test" });
+  const planForDay = createDayPlanner({ airFor, fetcher, apiKeys: ["k"], model: "gemini-test" });
   const base = { city, mode: "model", profile, activities, consumeAi: () => true };
 
   const rules = await planForDay({ ...base, useAI: false });
@@ -160,7 +160,7 @@ test("Planner service falls back honestly on AI failure, quota and missing forec
         candidates: [{ finishReason: "STOP", content: { parts: [{ text: "not json" }] } }],
       }),
     }),
-    apiKey: "k",
+    apiKeys: ["k"],
     model: "m",
   });
   const fallback = await broken({ ...base });
@@ -170,7 +170,7 @@ test("Planner service falls back honestly on AI failure, quota and missing forec
   const quota = createDayPlanner({
     airFor,
     fetcher: async () => ({ ok: false, status: 429 }),
-    apiKey: "k",
+    apiKeys: ["k"],
     model: "m",
   });
   assert.match((await quota({ ...base })).body.notice, /quota/);
@@ -183,7 +183,7 @@ test("Planner service falls back honestly on AI failure, quota and missing forec
       throw new Error("down");
     },
     fetcher: async () => geminiReply({}),
-    apiKey: "",
+    apiKeys: [],
     model: "m",
   });
   assert.equal((await noForecast({ ...base, useAI: false })).status, 503);
@@ -195,7 +195,7 @@ test("Sources without an hourly outlook use the regional model for planning", as
     calls.push(mode);
     return mode === "model" ? { mode: "model", hourly } : { mode: "live", hourly: [] };
   };
-  const planForDay = createDayPlanner({ airFor, fetcher: fetch, apiKey: "", model: "m" });
+  const planForDay = createDayPlanner({ airFor, fetcher: fetch, apiKeys: [], model: "m" });
   const result = await planForDay({
     city,
     mode: "live",
