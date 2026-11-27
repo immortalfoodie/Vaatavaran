@@ -108,6 +108,14 @@ test("Local assistant handles emergency, masks, school and ventilation", () => {
   );
   assert.match(localAnswer("Open a window?", air, DEFAULT_PROFILE), /combustion fumes/);
   assert.match(localAnswer("indoor plants?", air, DEFAULT_PROFILE), /not a substitute/);
+  assert.match(
+    localAnswer("Should I go out for a walk at noon?", air, DEFAULT_PROFILE),
+    /Lowest forecast in the next 12 hours.*Plan my day/,
+  );
+  assert.match(
+    localAnswer("Should I buy an air purifier or try a home remedy?", air, DEFAULT_PROFILE),
+    /DIY box-fan filter.*Clean-room calculator/,
+  );
 });
 
 test("A question about a child applies sensitive precautions even with a general profile", () => {

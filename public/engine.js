@@ -559,6 +559,25 @@ export function isEmergency(question) {
 }
 
 /**
+ * @param {Plan} plan
+ * @param {string} q Lowercased user question.
+ */
+function homeLocalAnswer(plan, q) {
+  const diyHint = /purif|hepa|filter|diy|box fan|remedy|remedies|budget|buy/.test(q)
+    ? " For sizing a HEPA purifier or a low-cost DIY box-fan filter (~350 m³/h), try Home guide → Clean-room calculator."
+    : "";
+  return `${plan.cards[2].action}${diyHint} Houseplants are not a substitute for source control and effective particle filtration.`;
+}
+
+/** @param {Plan} plan */
+function outdoorLocalAnswer(plan) {
+  const bestHint = plan.best
+    ? ` Lowest forecast in the next 12 hours is US AQI ${plan.best.aqi} (${category(plan.best.aqi).label.toLowerCase()}); use Daily plan → Plan my day to pick cleaner hours.`
+    : " Use Daily plan → Plan my day to check cleaner hours.";
+  return `${plan.cards[0].action} ${plan.cards[0].why}${bestHint} A lower forecast value is not necessarily safe.`;
+}
+
+/**
  * Deterministic rule-based answer used when AI is disabled, unavailable or bypassed.
  * @param {string} question
  * @param {Air} air
@@ -585,11 +604,15 @@ export function localAnswer(question, air, profile) {
   if (/commut|travel|bus|car|emission|carbon/.test(q)) {
     return `${plan.cards[1].action} ${plan.cards[1].impact}. Carbon estimates are illustrative and do not predict a personal health improvement.`;
   }
-  if (/purif|indoor|home|plant|incense/.test(q)) {
-    return `${plan.cards[2].action} Houseplants are not a substitute for source control and effective particle filtration.`;
+  if (
+    /purif|hepa|filter|diy|box fan|remedy|remedies|indoor|home|plant|incense|budget|buy/.test(q)
+  ) {
+    return homeLocalAnswer(plan, q);
   }
-  if (/walk|run|exercise|outdoor|park/.test(q)) {
-    return `${plan.cards[0].action} ${plan.cards[0].why} A lower forecast value is not necessarily safe.`;
+  if (
+    /walk|run|exercise|outdoor|park|go out|outside|noon|morning|afternoon|evening|best time/.test(q)
+  ) {
+    return outdoorLocalAnswer(plan);
   }
-  return `${plan.summary} Your priorities: ${plan.cards.map((c) => c.title.toLowerCase()).join("; ")}. Ask me about school runs, ventilation, exercise, masks, or commuting. This local guide uses fixed rules; it is not a generative AI response.`;
+  return `${plan.summary} Your priorities: ${plan.cards.map((c) => c.title.toLowerCase()).join("; ")}. Ask me about school runs, ventilation, exercise, masks, purifiers, or commuting. This local guide uses fixed rules; it is not a generative AI response.`;
 }
