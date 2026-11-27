@@ -44,21 +44,21 @@
   --radius: 14px;
   --radius-sm: 8px;
   --font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
-  /* Tokens use light-dark(); color-scheme picks the side (see the theme overrides below). */
-  color-scheme: light dark;
+  /* Tokens use light-dark(); color-scheme picks the side. Light is the default theme. */
+  color-scheme: light;
   font: 15px/1.55 var(--font-sans);
   color: var(--ink);
   background: var(--bg);
   font-synthesis: none;
 }
 
-/* Explicit theme chosen with the header toggle (theme.js); absent = follow the OS. */
-:root[data-theme="light"] {
-  color-scheme: light;
-}
-
+/* Opt-in themes chosen with the header toggle (theme.js); no attribute = light. */
 :root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+:root[data-theme="auto"] {
+  color-scheme: light dark;
 }
 
 *,

@@ -60,7 +60,7 @@ The goal is to turn “AQI is high” into **what to change, why it matters, and
 - **Impact calculator:** inspect the assumptions behind an illustrative car-to-transit carbon comparison. Estimates are never represented as measured savings or health improvements.
 - **Contextual assistant:** optional real generative AI, with a clearly labeled deterministic local guide when disabled or unavailable. Emergency symptom patterns bypass AI.
 - **Daily checklist:** browser-local progress; resets when household context changes. Plain-text household and community exports omit explicit health preferences.
-- **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support, responsive layouts, a light/dark theme that follows the operating system by default, with a header toggle (Auto → Light → Dark) that is remembered and applied before first paint, and skeleton placeholders (with `aria-busy`) instead of misleading "unavailable" text while data loads.
+- **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support, responsive layouts, a light theme by default with a header toggle (Light → Dark → Auto, where Auto follows the operating system) that is remembered and applied before first paint, and skeleton placeholders (with `aria-busy`) instead of misleading "unavailable" text while data loads.
 
 ## Enable Gemini on the free tier
 
@@ -136,7 +136,7 @@ public/dom.js            `$` / `el` helpers (textContent only, never innerHTML)
 public/engine.js         Shared pure AQI, planning, readiness, impact and local-guide logic
 public/aqi-scales.js     US EPA and India CPCB NAQI breakpoints and sub-index interpolation
 public/format.js         Locale-aware clock times and "4 minutes ago" relative ages
-public/theme.js          Auto / Light / Dark theme toggle (CSS tokens use light-dark())
+public/theme.js          Light (default) / Dark / Auto theme toggle (CSS tokens use light-dark())
 public/theme-boot.js     Applies a saved theme before first paint (CSP-safe, no inline script)
 public/time.js           Shared time-unit constants (browser + server)
 public/types.js          JSDoc type definitions (type checking only; never served)
