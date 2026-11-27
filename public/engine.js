@@ -1,9 +1,15 @@
 /** Shared, deterministic decision logic. AQI values use the US scale throughout. */
 import { HOUR_MS } from "./time.js";
+import { isRecord } from "./guard.js";
+import { CITIES } from "./cities.js";
+
+export { CITIES } from "./cities.js";
+export { isEmergency, localAnswer } from "./local-guide.js";
 
 /** @typedef {import("./types.js").City} City */
 /** @typedef {import("./types.js").Air} Air */
 /** @typedef {import("./types.js").Profile} Profile */
+/** @typedef {import("./types.js").Commute} Commute */
 /** @typedef {import("./types.js").Category} Category */
 /** @typedef {import("./types.js").Plan} Plan */
 /** @typedef {import("./types.js").PlanCard} PlanCard */
@@ -21,12 +27,13 @@ const DEMO_HOURLY_OFFSETS = [
   0, 8, 13, 4, -15, -32, -49, -55, -43, -29, -10, 6, 14, 18, 12, 2, -8, -20, -34, -46, -52, -40,
   -24, -6,
 ];
+
 /**
  * Illustrative per-passenger CO₂ factors (kg/km), not a verified carbon inventory.
- * @type {Record<import("./types.js").Commute, number>}
+ * @type {Record<Commute, number>}
  */
 export const CO2_KG_PER_KM = { car: 0.17, transit: 0.06, walk: 0, home: 0 };
-const COMMUTES = Object.keys(CO2_KG_PER_KM);
+const COMMUTES = new Set(Object.keys(CO2_KG_PER_KM));
 
 /** Category levels (index into AQI_BANDS) used by the decision rules. */
 export const LEVEL = Object.freeze({
@@ -47,119 +54,37 @@ const AQI_BANDS = [
   { max: MAX_AQI, label: "Hazardous", tone: "hazardous" },
 ];
 
-/** @type {City[]} */
-export const CITIES = [
+const UNKNOWN_READINESS = [
   {
-    id: "delhi",
-    name: "New Delhi",
-    region: "Delhi, India",
-    lat: 28.6139,
-    lon: 77.209,
-    zone: "Asia/Kolkata",
-    demo: 286,
-    demoPm25: 156,
-    demoPm10: 218,
+    id: "exercise",
+    label: "Outdoor Exercise",
+    status: "CHECK LOCAL",
+    tone: "unknown",
+    note: "Air data is unavailable. Verify a nearby monitor first.",
   },
   {
-    id: "mumbai",
-    name: "Mumbai",
-    region: "Maharashtra, India",
-    lat: 19.076,
-    lon: 72.8777,
-    zone: "Asia/Kolkata",
-    demo: 142,
-    demoPm25: 51,
-    demoPm10: 83,
+    id: "kids",
+    label: "Children & Sensitive",
+    status: "CHECK LOCAL",
+    tone: "unknown",
+    note: "Wait for a valid reading before outdoor play.",
   },
   {
-    id: "bengaluru",
-    name: "Bengaluru",
-    region: "Karnataka, India",
-    lat: 12.9716,
-    lon: 77.5946,
-    zone: "Asia/Kolkata",
-    demo: 72,
-    demoPm25: 21,
-    demoPm10: 42,
+    id: "windows",
+    label: "Open Windows",
+    status: "USE CAUTION",
+    tone: "unknown",
+    note: "Avoid trapping indoor smoke or heat while checking outdoor air.",
   },
   {
-    id: "kolkata",
-    name: "Kolkata",
-    region: "West Bengal, India",
-    lat: 22.5726,
-    lon: 88.3639,
-    zone: "Asia/Kolkata",
-    demo: 178,
-    demoPm25: 88,
-    demoPm10: 128,
-  },
-  {
-    id: "lucknow",
-    name: "Lucknow",
-    region: "Uttar Pradesh, India",
-    lat: 26.8467,
-    lon: 80.9462,
-    zone: "Asia/Kolkata",
-    demo: 224,
-    demoPm25: 124,
-    demoPm10: 180,
-  },
-  {
-    id: "chennai",
-    name: "Chennai",
-    region: "Tamil Nadu, India",
-    lat: 13.0827,
-    lon: 80.2707,
-    zone: "Asia/Kolkata",
-    demo: 48,
-    demoPm25: 8,
-    demoPm10: 19,
-  },
-  {
-    id: "hyderabad",
-    name: "Hyderabad",
-    region: "Telangana, India",
-    lat: 17.385,
-    lon: 78.4867,
-    zone: "Asia/Kolkata",
-    demo: 96,
-    demoPm25: 34,
-    demoPm10: 58,
-  },
-  {
-    id: "pune",
-    name: "Pune",
-    region: "Maharashtra, India",
-    lat: 18.5204,
-    lon: 73.8567,
-    zone: "Asia/Kolkata",
-    demo: 112,
-    demoPm25: 40,
-    demoPm10: 69,
-  },
-  {
-    id: "ahmedabad",
-    name: "Ahmedabad",
-    region: "Gujarat, India",
-    lat: 23.0225,
-    lon: 72.5714,
-    zone: "Asia/Kolkata",
-    demo: 158,
-    demoPm25: 68,
-    demoPm10: 114,
-  },
-  {
-    id: "jaipur",
-    name: "Jaipur",
-    region: "Rajasthan, India",
-    lat: 26.9124,
-    lon: 75.7873,
-    zone: "Asia/Kolkata",
-    demo: 184,
-    demoPm25: 94,
-    demoPm10: 146,
+    id: "mask",
+    label: "N95 / FFP2 Mask",
+    status: "STANDBY",
+    tone: "unknown",
+    note: "Keep a well-fitting respirator handy if visibility looks hazy.",
   },
 ];
+
 /** @type {Profile} */
 export const DEFAULT_PROFILE = {
   sensitive: true,
@@ -169,6 +94,7 @@ export const DEFAULT_PROFILE = {
   budget: "low",
   outdoor: "morning",
 };
+
 /**
  * Type guard for a real, finite number (rejects null, undefined, NaN and Infinity).
  * @param {unknown} value
@@ -193,22 +119,29 @@ export function category(value) {
 
 /**
  * Coerce untrusted input into a valid household profile.
- * @param {any} [input]
+ * @param {unknown} [input]
  * @returns {Profile}
  */
 export function normalizeProfile(input = {}) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) input = {};
+  const raw = isRecord(input) ? input : {};
+  const commute =
+    typeof raw.commute === "string" && COMMUTES.has(raw.commute)
+      ? /** @type {Commute} */ (raw.commute)
+      : "car";
+  const rawDistance = Number(raw.distance);
+  const distance = Number.isFinite(rawDistance)
+    ? Math.min(MAX_DISTANCE_KM, Math.max(0, rawDistance))
+    : DEFAULT_DISTANCE_KM;
   return {
-    sensitive: input.sensitive === true,
-    commute: COMMUTES.includes(input.commute) ? input.commute : "car",
-    distance: Number.isFinite(Number(input.distance))
-      ? Math.min(MAX_DISTANCE_KM, Math.max(0, Number(input.distance)))
-      : DEFAULT_DISTANCE_KM,
-    purifier: input.purifier === true,
-    budget: input.budget === "flexible" ? "flexible" : "low",
-    outdoor: input.outdoor === "evening" ? "evening" : "morning",
+    sensitive: raw.sensitive === true,
+    commute,
+    distance,
+    purifier: raw.purifier === true,
+    budget: raw.budget === "flexible" ? "flexible" : "low",
+    outdoor: raw.outdoor === "evening" ? "evening" : "morning",
   };
 }
+
 /**
  * Fixed, clearly-labelled demo scenario for a preset city.
  * @param {string} cityId Preset city id (falls back to the first city).
@@ -248,6 +181,7 @@ export function bestWindow(air) {
       null,
     );
 }
+
 /**
  * Illustrative daily CO₂ saving from switching a car commute to transit.
  * @param {Partial<Profile>} profile
@@ -281,9 +215,7 @@ function movementCard(profile, risk) {
     title = "Bring your movement indoors";
     action =
       "Swap the outdoor workout for gentle movement in a cleaner indoor space. Postpone strenuous outdoor activity.";
-    why = `${
-      risk.category.label
-    } air calls for less outdoor exposure, especially for sensitive household members.`;
+    why = `${risk.category.label} air calls for less outdoor exposure, especially for sensitive household members.`;
   }
   if (risk.unknown) {
     title = "Check local air before heading out";
@@ -342,9 +274,7 @@ function commuteCard(profile, risk, estimate) {
     icon: "train",
     title,
     action,
-    why: `${
-      profile.distance
-    } km total daily travel. Both the journey’s emissions and your outdoor exposure matter.`,
+    why: `${profile.distance} km total daily travel. Both the journey’s emissions and your outdoor exposure matter.`,
     impact:
       estimate.savedKg > 0
         ? `Illustrative car → transit saving: ${estimate.savedKg} kg CO₂ per day`
@@ -477,38 +407,7 @@ function maskVerdict(high, severe) {
 export function activityReadiness(air, input) {
   const profile = normalizeProfile(input);
   const band = category(air?.aqi);
-  if (band.level < 0) {
-    return [
-      {
-        id: "exercise",
-        label: "Outdoor Exercise",
-        status: "CHECK LOCAL",
-        tone: "unknown",
-        note: "Air data is unavailable. Verify a nearby monitor first.",
-      },
-      {
-        id: "kids",
-        label: "Children & Sensitive",
-        status: "CHECK LOCAL",
-        tone: "unknown",
-        note: "Wait for a valid reading before outdoor play.",
-      },
-      {
-        id: "windows",
-        label: "Open Windows",
-        status: "USE CAUTION",
-        tone: "unknown",
-        note: "Avoid trapping indoor smoke or heat while checking outdoor air.",
-      },
-      {
-        id: "mask",
-        label: "N95 / FFP2 Mask",
-        status: "STANDBY",
-        tone: "unknown",
-        note: "Keep a well-fitting respirator handy if visibility looks hazy.",
-      },
-    ];
-  }
+  if (band.level < 0) return UNKNOWN_READINESS.map((item) => ({ ...item }));
   const high = isHighRisk(band, profile);
   const severe = band.level >= LEVEL.VERY_UNHEALTHY;
   return [
@@ -547,72 +446,4 @@ export function activityReadiness(air, input) {
         : "Not typically required unless near heavy traffic or dust.",
     },
   ];
-}
-
-/**
- * Detect symptom phrases that must bypass AI and show urgent-care guidance.
- * @param {string} question
- * @returns {boolean}
- */
-export function isEmergency(question) {
-  return /chest pain|cannot breathe|can[’']t breathe|severe breath|blue lips/i.test(question);
-}
-
-/**
- * @param {Plan} plan
- * @param {string} q Lowercased user question.
- */
-function homeLocalAnswer(plan, q) {
-  const diyHint = /purif|hepa|filter|diy|box fan|remedy|remedies|budget|buy/.test(q)
-    ? " For sizing a HEPA purifier or a low-cost DIY box-fan filter (~350 m³/h), try Home guide → Clean-room calculator."
-    : "";
-  return `${plan.cards[2].action}${diyHint} Houseplants are not a substitute for source control and effective particle filtration.`;
-}
-
-/** @param {Plan} plan */
-function outdoorLocalAnswer(plan) {
-  const bestHint = plan.best
-    ? ` Lowest forecast in the next 12 hours is US AQI ${plan.best.aqi} (${category(plan.best.aqi).label.toLowerCase()}); use Daily plan → Plan my day to pick cleaner hours.`
-    : " Use Daily plan → Plan my day to check cleaner hours.";
-  return `${plan.cards[0].action} ${plan.cards[0].why}${bestHint} A lower forecast value is not necessarily safe.`;
-}
-
-/**
- * Deterministic rule-based answer used when AI is disabled, unavailable or bypassed.
- * @param {string} question
- * @param {Air} air
- * @param {Partial<Profile>} profile
- * @returns {string}
- */
-export function localAnswer(question, air, profile) {
-  const plan = makePlan(air, profile);
-  const q = question.toLowerCase();
-  if (isEmergency(question)) {
-    return "Severe breathing difficulty or chest pain needs urgent medical attention. Contact local emergency services now. This assistant cannot diagnose or manage an emergency.";
-  }
-  if (/mask|n95|respirator/.test(q)) {
-    return "For unavoidable particle-pollution exposure, a well-fitting certified N95/FFP2 respirator can help reduce inhaled particles, but does not filter all gases. Fit matters; ordinary cloth masks are not equivalent. Respirators may not fit young children. Ask a clinician about suitability for children or people with breathing conditions. Reducing outdoor exposure remains the priority.";
-  }
-  if (/window|ventilat/.test(q)) {
-    return `${
-      plan.cards[2].action
-    } Outdoor AQI alone cannot establish safe indoor air; avoid trapping combustion fumes and prioritize heat and immediate safety.`;
-  }
-  if (/school|child|kids|parent|asthma|elder|senior|pregnan/.test(q)) {
-    return `For a sensitive household: ${makePlan(air, { ...profile, sensitive: true }).cards[0].action} Follow school/local advisories and a clinician’s existing care plan. Do not change medication based on this app.`;
-  }
-  if (/commut|travel|bus|car|emission|carbon/.test(q)) {
-    return `${plan.cards[1].action} ${plan.cards[1].impact}. Carbon estimates are illustrative and do not predict a personal health improvement.`;
-  }
-  if (
-    /purif|hepa|filter|diy|box fan|remedy|remedies|indoor|home|plant|incense|budget|buy/.test(q)
-  ) {
-    return homeLocalAnswer(plan, q);
-  }
-  if (
-    /walk|run|exercise|outdoor|park|go out|outside|noon|morning|afternoon|evening|best time/.test(q)
-  ) {
-    return outdoorLocalAnswer(plan);
-  }
-  return `${plan.summary} Your priorities: ${plan.cards.map((c) => c.title.toLowerCase()).join("; ")}. Ask me about school runs, ventilation, exercise, masks, purifiers, or commuting. This local guide uses fixed rules; it is not a generative AI response.`;
 }

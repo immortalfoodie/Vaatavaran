@@ -3,6 +3,7 @@
  */
 import { makePlan } from "./engine.js";
 import { el } from "./dom.js";
+import { isRecord } from "./guard.js";
 import { SECOND_MS } from "./time.js";
 
 /** @typedef {import("./types.js").Air} Air */
@@ -62,11 +63,11 @@ export function removeKey(key) {
 
 /**
  * Saved app state (preferences, city, today's checklist).
- * @returns {Record<string, any>} Saved object, or {} when missing, corrupt or unavailable.
+ * @returns {Record<string, unknown>} Saved object, or {} when missing, corrupt or unavailable.
  */
 export function loadSavedState() {
   const value = loadJson(STORAGE_KEY);
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isRecord(value) ? value : {};
 }
 
 /**

@@ -3,7 +3,7 @@
  * the maths lives in clean-room.js.
  */
 import { DIY_BOX_CADR_M3H, TARGET_ACH, estimateCleanRoom } from "./clean-room.js";
-import { $ } from "./dom.js";
+import { $, $form, $input, $select } from "./dom.js";
 
 /** @typedef {import("./clean-room.js").RoomEstimate} RoomEstimate */
 
@@ -53,15 +53,15 @@ function renderEstimate(estimate) {
 
 /** Wire the calculator; safe to call when the form is absent. */
 export function bindCleanRoom() {
-  const form = /** @type {HTMLFormElement | null} */ ($("#clean-room-form"));
+  const form = $form("#clean-room-form");
   if (!form) return;
   const update = () => {
     const values = readForm(form);
-    $("#clean-room-cadr").disabled = values.diy;
-    $("#clean-room-unit").disabled = values.diy;
+    $input("#clean-room-cadr").disabled = values.diy;
+    $select("#clean-room-unit").disabled = values.diy;
     renderEstimate(estimateCleanRoom(values));
   };
   form.addEventListener("input", update);
-  form.addEventListener("submit", (/** @type {SubmitEvent} */ event) => event.preventDefault());
+  form.addEventListener("submit", (event) => event.preventDefault());
   update();
 }

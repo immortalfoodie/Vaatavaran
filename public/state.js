@@ -3,6 +3,7 @@
  * No DOM access; pure state helpers so the rules stay easy to follow and test.
  */
 import { CITIES, DEFAULT_PROFILE, normalizeProfile } from "./engine.js";
+import { isRecord } from "./guard.js";
 import { loadSavedState, saveState } from "./storage.js";
 
 /** @typedef {import("./types.js").Air} Air */
@@ -48,27 +49,38 @@ const DATA_MODES = ["demo", "live", "model"];
 export const emptyAir = () => ({ aqi: null, hourly: [], pm25: null, pm10: null });
 
 /**
- * @param {Record<string, any>} saved
+ * @param {Record<string, unknown>} saved
  * @returns {CustomCity | null}
  */
 function restoreCustomCity(saved) {
   const custom = saved.customCity;
-  const valid =
-    custom &&
-    typeof custom.name === "string" &&
-    Number.isFinite(custom.lat) &&
-    Number.isFinite(custom.lon);
-  return valid ? custom : null;
+  if (
+    !isRecord(custom) ||
+    typeof custom.name !== "string" ||
+    typeof custom.lat !== "number" ||
+    !Number.isFinite(custom.lat) ||
+    typeof custom.lon !== "number" ||
+    !Number.isFinite(custom.lon)
+  ) {
+    return null;
+  }
+  return {
+    name: custom.name,
+    region: typeof custom.region === "string" ? custom.region : undefined,
+    lat: custom.lat,
+    lon: custom.lon,
+    zone: typeof custom.zone === "string" ? custom.zone : undefined,
+  };
 }
 
 /**
- * @param {Record<string, any>} saved
+ * @param {Record<string, unknown>} saved
  * @param {CustomCity | null} customCity
  * @returns {string}
  */
 function restoreCityId(saved, customCity) {
   if (saved.city === CUSTOM_CITY_ID && customCity) return CUSTOM_CITY_ID;
-  if (CITIES.some((c) => c.id === saved.city)) return saved.city;
+  if (typeof saved.city === "string" && CITIES.some((c) => c.id === saved.city)) return saved.city;
   return DEFAULT_CITY_ID;
 }
 
@@ -107,7 +119,10 @@ export function createState() {
     alertAbove: ALERT_THRESHOLDS.has(alertAbove) ? alertAbove : 0,
     customCity,
     cityId: restoreCityId(saved, customCity),
-    mode: DATA_MODES.includes(saved.mode) ? saved.mode : "model",
+    mode:
+      typeof saved.mode === "string" && DATA_MODES.includes(/** @type {DataMode} */ (saved.mode))
+        ? /** @type {DataMode} */ (saved.mode)
+        : "model",
     googleUpgraded: saved.googleUpgraded === true,
     air: emptyAir(),
     forecastAir: null,
@@ -116,7 +131,11 @@ export function createState() {
     requestId: 0,
   };
   if (saved.day === dayKey(state) && Array.isArray(saved.completed)) {
-    state.completed = new Set(saved.completed.filter((id) => VALID_ACTIONS.has(id)));
+    state.completed = new Set(
+      saved.completed.filter(
+        (/** @type {unknown} */ id) => typeof id === "string" && VALID_ACTIONS.has(id),
+      ),
+    );
   }
   return state;
 }

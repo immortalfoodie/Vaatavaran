@@ -32,15 +32,15 @@ The app itself has **zero runtime dependencies**. Quality tooling is dev-only:
 
 ```sh
 npm install          # ESLint, Prettier and TypeScript (type checking only; no build step)
-npm run verify       # lint + format + strict type check + 131 tests with coverage + size budget
+npm run verify       # lint + format + strict type check + 141 tests with coverage + size budget
 ```
 
-| Script                  | What it enforces                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------- |
-| `npm run lint`          | ESLint recommended rules, complexity ≤ 14, max 4 params, JSDoc on exports, 0 warnings |
-| `npm run format:check`  | Prettier formatting (100-column, LF line endings)                                     |
-| `npm run typecheck`     | `tsc --checkJs` in **strict** mode against JSDoc types in `public/types.js`           |
-| `npm run test:coverage` | `node:test` with coverage gates (≥ 90% lines/functions, ≥ 80% branches)               |
+| Script                  | What it enforces                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `npm run lint`          | ESLint recommended rules, complexity ≤ 14, max 4 params, max 70 lines/fn, max 450 lines/file, no `any`, JSDoc |
+| `npm run format:check`  | Prettier formatting (100-column, LF line endings)                                                             |
+| `npm run typecheck`     | `tsc --checkJs` in **strict** mode against JSDoc types in `public/types.js` (zero `any`)                      |
+| `npm run test:coverage` | `node:test` with coverage gates (≥ 90% lines/functions, ≥ 80% branches; currently ~99% lines)                 |
 
 CI runs the same steps on Node 22 and 24 for every push and pull request.
 
@@ -129,45 +129,57 @@ Categories use **US AQI**: 0–50, 51–100, 101–150, 151–200, 201–300, 30
 Zero runtime dependencies; a small Node HTTP server and native browser modules keep the code auditable and the repository tiny.
 
 ```text
-public/index.html        Semantic dashboard, views, settings and chat dialogs
-public/style.css         Responsive visual system (with reduced-motion support)
-public/app.js            Controller: wires state, routing, air loading and UI events
-public/state.js          Validated app state restored from / persisted to localStorage
-public/api.js            Browser API client (deadlines, server error messages)
-public/chat.js           Assistant dialog: emergency bypass, AI/local answers, fallbacks
-public/city-search.js    Worldwide city search and multi-city comparison
-public/views.js          Stateless dashboard card and panel renderers
-public/charts.js         CSP-safe SVG dot-matrix, heatmap and CO₂ chart renderers
-public/storage.js        localStorage helpers and privacy-safe plan export
-public/dom.js            `$` / `el` helpers (textContent only, never innerHTML)
-public/engine.js         Shared pure AQI, planning, readiness, impact and local-guide logic
-public/aqi-scales.js     US EPA and India CPCB NAQI breakpoints and sub-index interpolation
-public/format.js         Locale-aware clock times and "4 minutes ago" relative ages
-public/theme.js          Light (default) / Dark / Auto theme toggle (CSS tokens use light-dark())
-public/theme-boot.js     Applies a saved theme before first paint (CSP-safe, no inline script)
-public/planner.js        Pure day planner: forecast slots, exposure windows, scheduling rules
-public/planner-view.js   "Plan my day" form and timeline
-public/clean-room.js     Pure clean-room maths (air changes, clean-down time, sizing)
+public/index.html         Semantic dashboard, views, settings and chat dialogs
+public/style.css          Design tokens (`light-dark()`), base layout, header and panel primitives
+public/overview.css       Overview hero, status tags, segmented meter, priorities and readiness
+public/features.css       Daily plan, home guide, analytics, footer and launcher styles
+public/dialogs.css        Modal dialogs, chat UI, responsive breakpoints, charts and skeletons
+public/app.js             Controller: wires state, routing, feature modules and UI events
+public/air-loader.js      Air-quality fetching, single fallback to regional model and loading states
+public/dialogs.js         Accessible modal focus restoration and household profile form
+public/state.js           Validated app state restored from / persisted to localStorage
+public/api.js             Browser API client (deadlines, server error messages)
+public/chat.js            Assistant dialog: emergency bypass, AI/local answers, fallbacks
+public/city-search.js     Worldwide city search and multi-city comparison
+public/views.js           Stateless dashboard view coordinator, brief, readiness and signals
+public/air-card-view.js   Air Quality Index hero card, India NAQI, delta pill and attributions
+public/priorities-view.js Priority checklist cards, household summary and completion counters
+public/charts.js          CSP-safe SVG dot-matrix, heatmap and CO₂ chart renderers
+public/storage.js         localStorage helpers and privacy-safe plan export
+public/dom.js             Strictly typed `$` / `$input` / `el` helpers (textContent only, never innerHTML)
+public/guard.js           Shared runtime type guards (`isRecord`) for strict `unknown` validation
+public/cities.js          Preset Indian city metadata, time zones and demo scenarios
+public/engine.js          Shared pure AQI, planning, readiness and impact logic
+public/local-guide.js     Deterministic rule-based assistant and emergency symptom detector
+public/aqi-scales.js      US EPA and India CPCB NAQI breakpoints and sub-index interpolation
+public/format.js          Locale-aware clock times and "4 minutes ago" relative ages
+public/theme.js           Light (default) / Dark / Auto theme toggle (CSS tokens use light-dark())
+public/theme-boot.js      Applies a saved theme before first paint (CSP-safe, no inline script)
+public/planner.js         Pure day planner: forecast slots, exposure windows, scheduling rules
+public/planner-view.js    "Plan my day" form and timeline
+public/clean-room.js      Pure clean-room maths (air changes, clean-down time, sizing)
 public/clean-room-view.js Clean-room calculator form
-public/history.js        Device-local monthly impact history (pure updates + storage)
-public/history-view.js   "Your impact this month" panel
-public/time.js           Shared time-unit constants (browser + server)
-public/types.js          JSDoc type definitions (type checking only; never served)
-server.mjs               HTTP server & Vercel handler: routing, security headers, handlers
-lib/request.mjs          Body limits, custom-city validation, client IP resolution
-lib/rate-limit.mjs       Bounded per-client fixed-window limiter (API + AI sub-limit)
-lib/http.mjs             Upstream fetch with deadline + TTL cache with in-flight sharing
-lib/air-quality.mjs      Source selection, Open-Meteo/CAMS parsing, 24h delta, geocoding
-lib/google-air.mjs       Google Air Quality API (500 m) client and US EPA AQI conversion
-lib/station-air.mjs      WAQI ground-station parser and provenance checks
-lib/assistant.mjs        Server-only Gemini adapter: plain-text answers and schema-bound JSON
-lib/day-plan.mjs         Day-plan service: rule-checked options, Gemini choice validation, fallbacks
-test/*.test.mjs          Unit, API, security, privacy and provider tests (node:test)
-vercel.json              Vercel security headers (mirrors server.mjs)
-eslint.config.js         Lint rules and maintainability budgets
-jsconfig.json            Strict JSDoc type checking configuration
-scripts/check-size.mjs   Source budget check (<10 MB)
-.github/workflows/ci.yml Lint, format, type check, coverage and size on Node 22 and 24
+public/history.js         Device-local monthly impact history (pure updates + storage)
+public/history-view.js    "Your impact this month" panel
+public/time.js            Shared time-unit constants (browser + server)
+public/types.js           JSDoc type definitions (type checking only; never served)
+server.mjs                HTTP server & Vercel entrypoint: wires middleware, rate limits and routes
+lib/static.mjs            Allowlisted static asset delivery, CSP and baseline security headers
+lib/api-routes.mjs        Validated API handlers for geocode, air quality, chat and day planning
+lib/request.mjs           Body limits, custom-city validation, client IP resolution
+lib/rate-limit.mjs        Bounded per-client fixed-window limiter (API + AI sub-limit)
+lib/http.mjs              Upstream fetch with deadline + TTL cache with in-flight sharing
+lib/air-quality.mjs       Source selection, Open-Meteo/CAMS parsing, 24h delta, geocoding
+lib/google-air.mjs        Google Air Quality API (500 m) client and US EPA AQI conversion
+lib/station-air.mjs       WAQI ground-station parser and provenance checks
+lib/assistant.mjs         Server-only Gemini adapter: plain-text answers and schema-bound JSON
+lib/day-plan.mjs          Day-plan service: rule-checked options, Gemini choice validation, fallbacks
+test/*.test.mjs           Unit, API, security, privacy and provider tests (node:test)
+vercel.json               Vercel security headers (mirrors lib/static.mjs)
+eslint.config.js          Strict lint rules, zero-`any` and maintainability budgets
+jsconfig.json             Strict JSDoc type checking configuration
+scripts/check-size.mjs    Source budget check (<10 MB)
+.github/workflows/ci.yml  Lint, format, type check, coverage and size on Node 22 and 24
 ```
 
 ## Security and privacy
@@ -186,7 +198,7 @@ For Internet hosting, run behind HTTPS, set `HOST=0.0.0.0` and `APP_ORIGIN=https
 
 ## Validation
 
-`npm run verify` runs 131 deterministic tests without external network or paid AI calls, and fails if coverage drops below the configured thresholds. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling, provider fallbacks, rate-limit windows, request-body limits, custom-coordinate bounds, export privacy, API keys kept out of URLs, India NAQI bands (including CPCB’s published interpolation examples), relative-time formatting, theme toggle and theme-token consistency, day-plan scheduling (waking hours, fixed activities, indoor swaps, half-hour time zones, data gaps), Gemini choice validation and fallbacks, clean-room maths, monthly history (replacement, retention, tampered storage), and a check that every browser module is allowlisted by the server.
+`npm run verify` runs 141 deterministic tests without external network or paid AI calls, and fails if coverage drops below the configured thresholds. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling, provider fallbacks, rate-limit windows, request-body limits, custom-coordinate bounds, export privacy, API keys kept out of URLs, India NAQI bands (including CPCB’s published interpolation examples), relative-time formatting, theme toggle and theme-token consistency, day-plan scheduling (waking hours, fixed activities, indoor swaps, half-hour time zones, data gaps), Gemini choice validation and fallbacks, clean-room maths, monthly history (replacement, retention, tampered storage), and a check that every browser module is allowlisted by the server.
 
 Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persisted checklist state, city switching, assistant responses, literal rendering of HTML-like input, export downloads, impact calculations, simulated live outage and keyboard dialog dismissal. See [validation notes](docs/VALIDATION.md) for final results and limitations.
 

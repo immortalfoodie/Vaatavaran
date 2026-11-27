@@ -4,7 +4,7 @@
  */
 import { localAnswer, isEmergency } from "./engine.js";
 import { cityContext, postChat } from "./api.js";
-import { $, el } from "./dom.js";
+import { $, $button, $input, el } from "./dom.js";
 
 /** @typedef {import("./types.js").Air} Air */
 /** @typedef {import("./types.js").City} City */
@@ -54,7 +54,7 @@ function buildContext(snapshot, question) {
     mode: snapshot.mode,
     profile: { ...snapshot.profile },
     question,
-    useAI: $("#ai-optin").checked,
+    useAI: $input("#ai-optin").checked,
   };
 }
 
@@ -90,14 +90,14 @@ export function createChat(getSnapshot) {
   /** @param {boolean} value */
   function setBusy(value) {
     busy = value;
-    $("#send-question").disabled = value;
+    $button("#send-question").disabled = value;
   }
 
   async function ask(/** @type {string} */ rawQuestion) {
     const question = rawQuestion.trim();
     if (busy || !question) return;
     const snapshot = getSnapshot();
-    $("#question").value = "";
+    $input("#question").value = "";
     addMessage(question, "user", "YOU");
 
     if (isEmergency(question)) {

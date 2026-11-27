@@ -12,6 +12,7 @@
 import { category, isHighRisk, normalizeProfile, LEVEL } from "./engine.js";
 import { pm25FromUsAqi } from "./aqi-scales.js";
 import { formatClock, formatTime, localMinuteOfDay } from "./format.js";
+import { isRecord } from "./guard.js";
 import { HOUR_MS } from "./time.js";
 
 /** @typedef {import("./types.js").HourlyPoint} HourlyPoint */
@@ -124,13 +125,16 @@ const minuteOf = (time) => Number(time.slice(0, 2)) * MINUTES_PER_HOUR + Number(
 
 /**
  * Validate one untrusted activity; returns null when it cannot be planned.
- * @param {any} raw
+ * @param {unknown} raw
  * @param {number} index Position in the list (drives the stable id).
  * @returns {Activity | null}
  */
 function normalizeActivity(raw, index) {
-  if (!raw || typeof raw !== "object") return null;
-  const type = Object.hasOwn(ACTIVITY_TYPES, raw.type) ? raw.type : null;
+  if (!isRecord(raw)) return null;
+  const type =
+    typeof raw.type === "string" && Object.hasOwn(ACTIVITY_TYPES, raw.type)
+      ? /** @type {keyof typeof ACTIVITY_TYPES} */ (raw.type)
+      : null;
   const time = typeof raw.time === "string" && TIME_PATTERN.test(raw.time) ? raw.time : null;
   if (!type || !time) return null;
   const minutes = clamp(
@@ -142,7 +146,7 @@ function normalizeActivity(raw, index) {
   return {
     id: `a${index + 1}`,
     type,
-    label: custom || ACTIVITY_TYPES[/** @type {keyof typeof ACTIVITY_TYPES} */ (type)].label,
+    label: custom || ACTIVITY_TYPES[type].label,
     minutes,
     time,
     flexible: raw.flexible === true,

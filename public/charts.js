@@ -59,9 +59,10 @@ const IMPACT_CHART = {
 
 /**
  * Create an SVG element with stringified attributes.
- * @param {string} tag
+ * @template {keyof SVGElementTagNameMap} K
+ * @param {K} tag
  * @param {Record<string, string | number>} [attrs]
- * @returns {any}
+ * @returns {SVGElementTagNameMap[K]}
  */
 function svgEl(tag, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tag);
@@ -322,6 +323,12 @@ export function renderExposureMatrix(air, city) {
     times.append(el("span", "", text));
   }
   container.append(times);
+  container.setAttribute(
+    "aria-label",
+    hours.length
+      ? `12-hour exposure heatmap: US AQI ranges from ${minAqi} to ${maxAqi} across the next ${hours.length} hours.`
+      : "12-hour exposure heatmap unavailable for this feed.",
+  );
 }
 
 /**
@@ -396,4 +403,8 @@ export function renderImpact(distance) {
   svg.append(cLabel);
 
   chart.append(svg);
+  chart.setAttribute(
+    "aria-label",
+    `Commute CO₂ comparison for ${value} km: public transit ${transitKg.toFixed(2)} kg CO₂ versus solo car ${carKg.toFixed(2)} kg CO₂, avoiding ${estimate.savedKg.toFixed(2)} kg CO₂ per day.`,
+  );
 }

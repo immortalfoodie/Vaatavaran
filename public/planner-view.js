@@ -8,7 +8,7 @@ import { category } from "./engine.js";
 import { cityContext, postDayPlan } from "./api.js";
 import { formatClock, formatTime, relativeDay } from "./format.js";
 import { loadJson, removeKey, saveJson } from "./storage.js";
-import { $, el } from "./dom.js";
+import { $, $button, $form, $input, el } from "./dom.js";
 
 /** @typedef {import("./planner.js").DayPlan} DayPlan */
 /** @typedef {import("./planner.js").PlanStep} PlanStep */
@@ -161,7 +161,7 @@ function renderRows(rows) {
       routineRow(row, index, () => renderRows(readRows().filter((_, i) => i !== index))),
     ),
   );
-  $("#routine-add").disabled = rows.length >= MAX_ACTIVITIES;
+  $button("#routine-add").disabled = rows.length >= MAX_ACTIVITIES;
 }
 
 /** @param {number} fraction */
@@ -298,8 +298,8 @@ function renderPlan(reply, city, onFollow) {
  * @returns {PlannerController}
  */
 export function bindPlanner({ getSnapshot, onFollow }) {
-  const form = $("#day-planner-form");
-  const submit = $("#plan-day-submit");
+  const form = $form("#day-planner-form");
+  const submit = $button("#plan-day-submit");
   const result = $("#day-plan-result");
   renderRows(loadRoutine());
 
@@ -311,7 +311,7 @@ export function bindPlanner({ getSnapshot, onFollow }) {
     ]);
   });
 
-  form.addEventListener("submit", async (/** @type {SubmitEvent} */ event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
     const activities = readRows();
@@ -325,7 +325,7 @@ export function bindPlanner({ getSnapshot, onFollow }) {
         mode: snapshot.mode,
         profile: snapshot.profile,
         activities,
-        useAI: $("#plan-ai-optin").checked,
+        useAI: $input("#plan-ai-optin").checked,
       });
       renderPlan(reply, snapshot.city, onFollow);
     } catch (error) {
@@ -339,7 +339,7 @@ export function bindPlanner({ getSnapshot, onFollow }) {
 
   return {
     setAiAvailable(available) {
-      $("#plan-ai-optin").disabled = !available;
+      $input("#plan-ai-optin").disabled = !available;
       $("#plan-ai-availability").textContent = available
         ? "(Gemini · opt-in)"
         : "(server key not configured)";

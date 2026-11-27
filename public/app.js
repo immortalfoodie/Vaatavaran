@@ -1,26 +1,25 @@
 /**
- * Vaatavaran client controller: wires state, hash routing, air loading and UI events.
- * Feature modules (chat, city search, views, storage) receive what they need explicitly.
+ * Vaatavaran client controller: wires state, hash routing, feature modules and UI events.
  */
 import { renderDashboard, renderFreshness } from "./views.js";
 import { renderForecast, renderImpact } from "./charts.js";
 import { clearSavedState, buildPlanText, downloadPlanText } from "./storage.js";
-import { CITIES, DEFAULT_PROFILE, demoAir, impact, normalizeProfile, makePlan } from "./engine.js";
-import { fetchAir, fetchHealth } from "./api.js";
+import { CITIES, DEFAULT_PROFILE, impact, normalizeProfile, makePlan } from "./engine.js";
+import { fetchHealth } from "./api.js";
 import { createChat, resetChat } from "./chat.js";
 import { bindCitySearch, loadCityComparison } from "./city-search.js";
+import { createAirLoader } from "./air-loader.js";
+import { bindDialogClosers, openModal, openProfileDialog, submitProfileForm } from "./dialogs.js";
 import {
-  ALERT_THRESHOLDS,
   CUSTOM_CITY_ID,
   DEFAULT_CITY_ID,
   VALID_ACTIONS,
   createState,
   currentCity,
   dayKey,
-  emptyAir,
   persistState,
 } from "./state.js";
-import { $, el, setLoadingRegion } from "./dom.js";
+import { $, $button, $dialog, $input, $select, el } from "./dom.js";
 import { bindThemeToggle } from "./theme.js";
 import { bindPlanner } from "./planner-view.js";
 import { bindCleanRoom } from "./clean-room-view.js";
@@ -47,7 +46,6 @@ import { MINUTE_MS, SECOND_MS } from "./time.js";
 const VALID_PAGES = new Set(["today", "plan", "home", "impact"]);
 const STALE_REFRESH_MS = 10 * MINUTE_MS;
 const POLL_INTERVAL_MS = MINUTE_MS;
-/** How often the "Updated X minutes ago" label is refreshed. */
 const FRESHNESS_TICK_MS = 30 * SECOND_MS;
 
 /** @type {Record<string, [title: string, subtitle: string]>} */
@@ -64,7 +62,6 @@ const PAGE_HEADINGS = {
 /** @type {AppState} */
 const state = createState();
 const city = () => currentCity(state);
-/** Current city, data source and household, as read by the chat and the day planner. */
 const snapshot = () => ({
   cityId: state.cityId,
   city: city(),
@@ -77,8 +74,6 @@ const chat = createChat(snapshot);
 let history = loadHistory();
 /** @type {PlannerController | null} */
 let planner = null;
-
-/* ---------- Status & persistence ---------- */
 
 /**
  * Show (or clear, with "") the polite status banner.
@@ -97,36 +92,24 @@ function persist() {
   }
 }
 
-/**
- * Change the data source and keep the selector in sync.
- * @param {DataMode} mode
- */
+/** @param {DataMode} mode */
 function setMode(mode) {
   state.mode = mode;
-  $("#data-mode").value = mode;
+  $select("#data-mode").value = mode;
 }
-
-/* ---------- Monthly impact history ---------- */
 
 function renderHistory() {
   const month = dayKey(state).slice(0, 7);
   renderMonthlyImpact(summarizeMonth(history, month), month);
 }
 
-/**
- * Apply a change to the stored history and refresh the monthly totals.
- * @param {(current: History) => History} change
- */
+/** @param {(current: History) => History} change */
 function updateHistory(change) {
   history = change(history);
   saveHistory(history);
   renderHistory();
 }
 
-/**
- * Record today's checklist after the household ticks or unticks an action. Context changes
- * (city, source, preferences) reset the checklist but never erase what was already recorded.
- */
 function recordTodayChecklist() {
   const co2Kg = state.completed.has("commute") ? impact(state.profile).savedKg : 0;
   updateHistory((current) =>
@@ -142,10 +125,8 @@ function clearImpactHistory() {
   setStatus("Monthly impact history cleared from this device.");
 }
 
-/* ---------- Rendering ---------- */
-
 function populateCitySelect() {
-  const select = $("#city");
+  const select = $select("#city");
   select.replaceChildren();
   for (const preset of CITIES) {
     const option = el("option", "", `${preset.name} · ${preset.region}`);
@@ -164,10 +145,6 @@ function populateCitySelect() {
 /** @param {number} index */
 function selectHour(index) {
   state.selectedHourIndex = index;
-  renderForecastOnly();
-}
-
-function renderForecastOnly() {
   const outlookAir = state.air.hourly?.length ? state.air : state.forecastAir || state.air;
   const separateOutlook = outlookAir !== state.air && Boolean(outlookAir.hourly?.length);
   renderForecast({
@@ -200,7 +177,7 @@ function render() {
   });
 }
 
-/* ---------- Routing ---------- */
+const { loadAir } = createAirLoader({ state, setMode, setStatus, persist, render });
 
 function closeMobileNav() {
   $("#top-nav").classList.remove("open");
@@ -233,115 +210,10 @@ function route() {
   }
 }
 
-/* ---------- Air data ---------- */
-
-/**
- * @param {number} aqi
- * @returns {string} Proactive alert text, or "" when below the user's threshold.
- */
-function alertMessage(aqi) {
-  if (state.alertAbove <= 0 || !Number.isFinite(aqi) || aqi < state.alertAbove) return "";
-  return `Proactive alert: ${city().name} is at US AQI ${aqi} (your alert threshold: ${state.alertAbove}+).`;
-}
-
-/** @param {boolean} busy */
-function setAirBusy(busy) {
-  $("#refresh").disabled = busy;
-  $("#today-view").setAttribute("aria-busy", String(busy));
-  setLoadingRegion("air", busy);
-}
-
-/**
- * Reset the dashboard for a new load and show the demo scenario or an empty "checking" state.
- * @returns {number} Request id used to discard stale responses.
- */
-function beginAirLoad() {
-  if (city().id === CUSTOM_CITY_ID && state.mode === "demo") setMode("model");
-  state.selectedHourIndex = null;
-  state.forecastAir = null;
-  state.air = state.mode === "demo" ? demoAir(state.cityId) : emptyAir();
-  setAirBusy(true);
-  setLoadingRegion("outlook", true);
-  $(".air-card").dataset.state = "loading";
-  setStatus(state.mode === "demo" ? "" : "Fetching the selected air-quality source…");
-  render();
-  return ++state.requestId;
-}
-
-/** @param {unknown} error */
-function showAirError(error) {
-  const err = /** @type {Error} */ (error);
-  setLoadingRegion("outlook", false);
-  $(".air-card").dataset.state = "error";
-  setStatus(err.name === "TimeoutError" ? "Live data timed out." : err.message, {
-    showRecovery: true,
-  });
-}
-
-/**
- * Load the primary reading for the selected city and source.
- * If the live source fails, fall back exactly once to the regional model and say so.
- * @param {{ allowFallback?: boolean, notice?: string }} [options]
- */
-async function loadAir({ allowFallback = true, notice = "" } = {}) {
-  const id = beginAirLoad();
-  const isCurrent = () => id === state.requestId;
-  try {
-    if (state.mode !== "demo") {
-      const data = await fetchAir(city(), state.mode);
-      if (!isCurrent()) return;
-      state.air = data;
-      setStatus(alertMessage(Number(data.aqi)) || notice);
-      render();
-    }
-    // Google and station readings carry no hourly outlook; fetch the regional model for it.
-    const needsSeparateOutlook = !state.air.hourly?.length;
-    setLoadingRegion("outlook", needsSeparateOutlook);
-    if (needsSeparateOutlook) loadSeparateOutlook(id);
-    $(".air-card").dataset.state = state.mode;
-  } catch (error) {
-    if (!isCurrent()) return;
-    if (state.mode !== "live" || !allowFallback) {
-      showAirError(error);
-      return;
-    }
-    setMode("model");
-    persist();
-    await loadAir({
-      allowFallback: false,
-      notice: "The live source was unavailable, so the regional model is shown instead.",
-    });
-  } finally {
-    if (isCurrent()) setAirBusy(false);
-  }
-}
-
-/**
- * Sources without an hourly outlook (Google, stations) get a separate, labelled model outlook.
- * @param {number} requestId Discard the result if the user has since changed city or source.
- */
-function loadSeparateOutlook(requestId) {
-  fetchAir(city(), "model")
-    .then((modelData) => {
-      if (requestId !== state.requestId || !modelData.hourly?.length) return;
-      state.forecastAir = modelData;
-      render();
-    })
-    .catch(() => {
-      /* Keep the primary reading intact if the regional outlook is temporarily unreachable. */
-    })
-    .finally(() => {
-      if (requestId === state.requestId) setLoadingRegion("outlook", false);
-    });
-}
-
-/**
- * Switch to a preset or custom city, resetting today's checklist.
- * @param {string} cityId
- */
+/** @param {string} cityId */
 function selectCity(cityId) {
   state.cityId = cityId;
-  $("#city").value = cityId;
+  $select("#city").value = cityId;
   state.completed.clear();
   persist();
   loadAir();
@@ -352,15 +224,13 @@ function selectCustomCity(loc) {
   state.customCity = loc;
   if (state.mode === "demo") setMode("model");
   populateCitySelect();
-  $("#city-dialog").close();
+  $dialog("#city-dialog").close();
   selectCity(CUSTOM_CITY_ID);
 }
 
-/* ---------- Export ---------- */
-
 /** @param {boolean} [community] */
-function planText(community = false) {
-  return buildPlanText({
+const planText = (community = false) =>
+  buildPlanText({
     air: state.air,
     profile: state.profile,
     city: city(),
@@ -368,7 +238,6 @@ function planText(community = false) {
     day: dayKey(state),
     community,
   });
-}
 
 /** @param {boolean} community */
 function exportPlan(community) {
@@ -386,50 +255,6 @@ async function copyPlan() {
   }
 }
 
-/* ---------- Dialogs & settings ---------- */
-
-function openProfile() {
-  closeMobileNav();
-  const form = $("#profile-form");
-  for (const [key, value] of Object.entries(state.profile)) {
-    const field = form.elements.namedItem(key);
-    if (field.type === "checkbox") field.checked = value;
-    else field.value = value;
-  }
-  const alertField = form.elements.namedItem("alertAbove");
-  if (alertField) alertField.value = String(state.alertAbove);
-  $("#profile-dialog").showModal();
-}
-
-function openChat() {
-  closeMobileNav();
-  $("#chat-dialog").showModal();
-  $("#question").focus();
-}
-
-function openGuide() {
-  closeMobileNav();
-  $("#guide-dialog").showModal();
-}
-
-/** @param {SubmitEvent} event */
-function saveProfile(event) {
-  event.preventDefault();
-  const data = new FormData(/** @type {HTMLFormElement} */ (event.currentTarget));
-  state.profile = normalizeProfile({
-    ...Object.fromEntries(data),
-    sensitive: data.has("sensitive"),
-    purifier: data.has("purifier"),
-  });
-  const threshold = Number(data.get("alertAbove"));
-  state.alertAbove = ALERT_THRESHOLDS.has(threshold) ? threshold : 0;
-  state.completed.clear();
-  persist();
-  render();
-  $("#profile-dialog").close();
-  setStatus("Your daily plan now reflects your household preferences.");
-}
-
 function resetSavedData() {
   clearSavedState();
   state.profile = normalizeProfile(DEFAULT_PROFILE);
@@ -439,13 +264,13 @@ function resetSavedData() {
   populateCitySelect();
   state.completed.clear();
   resetChat();
-  $("#ai-optin").checked = false;
+  $input("#ai-optin").checked = false;
   clearHistory();
   history = emptyHistory();
   planner?.reset();
   render();
   renderHistory();
-  $("#profile-dialog").close();
+  $dialog("#profile-dialog").close();
   setStatus("Saved preferences, routine, monthly history and this page’s chat have been reset.");
 }
 
@@ -458,7 +283,7 @@ function onClickAll(ids, handler) {
   for (const id of ids) document.getElementById(id)?.addEventListener("click", handler);
 }
 
-function bindEvents() {
+function bindSourceAndCityEvents() {
   bindCitySearch(selectCustomCity);
   $("#compare-load")?.addEventListener("click", () =>
     loadCityComparison(state.cityId, (pickedId) => {
@@ -466,10 +291,9 @@ function bindEvents() {
       selectCity(pickedId);
     }),
   );
-
-  $("#city").addEventListener("change", () => selectCity($("#city").value));
-  $("#data-mode").addEventListener("change", () => {
-    setMode($("#data-mode").value);
+  $select("#city").addEventListener("change", () => selectCity($select("#city").value));
+  $select("#data-mode").addEventListener("change", () => {
+    setMode(/** @type {DataMode} */ ($select("#data-mode").value));
     state.completed.clear();
     persist();
     loadAir();
@@ -480,21 +304,38 @@ function bindEvents() {
     persist();
     loadAir();
   });
+}
+
+function bindDialogAndActionEvents() {
+  const openProfile = () => openProfileDialog(state, closeMobileNav);
+  const openChat = () => {
+    closeMobileNav();
+    openModal($dialog("#chat-dialog"), $input("#question"));
+  };
+  const openGuide = () => {
+    closeMobileNav();
+    openModal($dialog("#guide-dialog"));
+  };
 
   onClickAll(["profile-open", "household-edit", "home-profile", "plan-edit-profile"], openProfile);
   onClickAll(["chat-open", "qa-ask", "plan-ask-ai"], openChat);
-  onClickAll(["about-open", "sources-open"], () => $("#about-dialog").showModal());
+  onClickAll(["about-open", "sources-open"], () => openModal($dialog("#about-dialog")));
   onClickAll(["guide-open", "footer-guide-open"], openGuide);
   $("#guide-open-profile")?.addEventListener("click", () => {
-    $("#guide-dialog").close();
+    $dialog("#guide-dialog").close();
     openProfile();
   });
-
   onClickAll(["copy-plan", "plan-copy"], copyPlan);
   onClickAll(["share-plan"], () => exportPlan(false));
   onClickAll(["community-export"], () => exportPlan(true));
   onClickAll(["chat-clear"], resetChat);
   onClickAll(["impact-clear"], clearImpactHistory);
+  bindDialogClosers();
+}
+
+function bindEvents() {
+  bindSourceAndCityEvents();
+  bindDialogAndActionEvents();
 
   $("#menu-toggle").addEventListener("click", () => {
     const open = $("#top-nav").classList.toggle("open");
@@ -504,21 +345,22 @@ function bindEvents() {
     if (event.key === "Escape") closeMobileNav();
   });
 
-  $("#profile-form").addEventListener("submit", saveProfile);
-  $("#reset-profile").addEventListener("click", resetSavedData);
-
-  document.querySelectorAll("[data-close]").forEach((button) =>
-    button.addEventListener("click", () => {
-      const dialogId = /** @type {HTMLElement} */ (button).dataset.close ?? "";
-      /** @type {HTMLDialogElement | null} */ (document.getElementById(dialogId))?.close();
+  $("#profile-form").addEventListener("submit", (event) =>
+    submitProfileForm(/** @type {SubmitEvent} */ (event), state, {
+      onSaved() {
+        persist();
+        render();
+        setStatus("Your daily plan now reflects your household preferences.");
+      },
     }),
   );
-  $("#impact-distance").addEventListener("input", (/** @type {Event} */ event) =>
+  $("#reset-profile").addEventListener("click", resetSavedData);
+  $input("#impact-distance").addEventListener("input", (event) =>
     renderImpact(/** @type {HTMLInputElement} */ (event.target).value),
   );
-  $("#chat-form").addEventListener("submit", (/** @type {SubmitEvent} */ event) => {
+  $("#chat-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    chat.ask($("#question").value);
+    chat.ask($input("#question").value);
   });
   document
     .querySelectorAll("[data-question]")
@@ -530,11 +372,8 @@ function bindEvents() {
   window.addEventListener("hashchange", route);
 }
 
-/* ---------- Background freshness ---------- */
-
 let activeDay = dayKey(state);
 
-/** Reset the checklist at local midnight and refetch readings older than 10 minutes. */
 function refreshAgingContext() {
   if (document.hidden) return;
   const nextDay = dayKey(state);
@@ -547,10 +386,9 @@ function refreshAgingContext() {
   }
   const fetchedAt = state.air.fetchedAt ? Date.parse(state.air.fetchedAt) : 0;
   const stale = Date.now() - fetchedAt > STALE_REFRESH_MS;
-  if (state.mode !== "demo" && !$("#refresh").disabled && stale) loadAir();
+  if (state.mode !== "demo" && !$button("#refresh").disabled && stale) loadAir();
 }
 
-/** Keep the "Updated X minutes ago" label current while the page is visible. */
 function tickFreshness() {
   if (!document.hidden) renderFreshness(state.air, state.mode);
 }
@@ -562,10 +400,7 @@ function liveModeOptionLabel(health) {
   return "REGIONAL MODEL";
 }
 
-/**
- * Reflect server capabilities; upgrade to Google Air once when it becomes available.
- * @param {Health} health
- */
+/** @param {Health} health */
 function applyHealth(health) {
   $("#data-mode option[value=live]").textContent = liveModeOptionLabel(health);
   if (health.googleAir && !state.googleUpgraded && state.mode !== "demo") {
@@ -574,7 +409,7 @@ function applyHealth(health) {
     persist();
     loadAir();
   }
-  $("#ai-optin").disabled = !health.ai;
+  $input("#ai-optin").disabled = !health.ai;
   $("#ai-availability").textContent = health.ai
     ? "(Gemini · opt-in)"
     : "(server key not configured)";
@@ -582,7 +417,7 @@ function applyHealth(health) {
 }
 
 function init() {
-  bindThemeToggle($("#theme-toggle"));
+  bindThemeToggle($button("#theme-toggle"));
   bindCleanRoom();
   planner = bindPlanner({
     getSnapshot: snapshot,
@@ -593,7 +428,7 @@ function init() {
   });
   renderHistory();
   populateCitySelect();
-  $("#data-mode").value = state.mode;
+  $select("#data-mode").value = state.mode;
   bindEvents();
   document.addEventListener("visibilitychange", () => {
     tickFreshness();

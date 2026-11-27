@@ -5,6 +5,7 @@
  * small storage wrappers at the end are the only code that touches localStorage.
  */
 import { loadJson, removeKey, saveJson } from "./storage.js";
+import { isRecord } from "./guard.js";
 
 const HISTORY_KEY = "vaatavaran-history";
 /** Days kept on the device; older entries are dropped on every write. */
@@ -48,11 +49,11 @@ export const emptyHistory = () => ({ days: {} });
 const nonNegative = (n) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : 0);
 
 /**
- * @param {any} raw
+ * @param {unknown} raw
  * @returns {PlanRecord | null}
  */
 function normalizePlanRecord(raw) {
-  if (!raw || typeof raw !== "object") return null;
+  if (!isRecord(raw)) return null;
   return {
     moved: nonNegative(raw.moved),
     indoors: nonNegative(raw.indoors),
@@ -67,15 +68,21 @@ function normalizePlanRecord(raw) {
  * @returns {History}
  */
 export function normalizeHistory(raw) {
-  const days = /** @type {any} */ (raw)?.days;
-  if (!days || typeof days !== "object") return emptyHistory();
+  const days = isRecord(raw) ? raw.days : null;
+  if (!isRecord(days)) return emptyHistory();
   /** @type {Record<string, DayRecord>} */
   const clean = {};
   for (const [day, record] of Object.entries(days)) {
-    if (!DAY_KEY_PATTERN.test(day) || !record || typeof record !== "object") continue;
+    if (!DAY_KEY_PATTERN.test(day) || !isRecord(record)) continue;
     clean[day] = {
       completed: Array.isArray(record.completed)
-        ? [...new Set(record.completed.filter((/** @type {string} */ id) => ACTION_IDS.has(id)))]
+        ? [
+            ...new Set(
+              record.completed.filter(
+                (/** @type {unknown} */ id) => typeof id === "string" && ACTION_IDS.has(id),
+              ),
+            ),
+          ]
         : [],
       co2Kg: Math.min(MAX_CO2_KG_PER_DAY, nonNegative(record.co2Kg)),
       plan: normalizePlanRecord(record.plan),

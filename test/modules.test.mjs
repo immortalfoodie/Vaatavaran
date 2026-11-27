@@ -27,7 +27,14 @@ async function pageScripts() {
   return [...html.matchAll(scriptSrc)].map(([, name]) => name);
 }
 
-test("Every page script and browser module reachable from app.js is served as JavaScript", async (t) => {
+/** Stylesheets referenced directly by index.html. */
+async function pageStylesheets() {
+  const html = await readFile(new URL("index.html", PUBLIC_DIR), "utf8");
+  const cssHref = /<link\b[^>]*rel="stylesheet"[^>]*\bhref="\/([\w-]+\.css)"/g;
+  return [...html.matchAll(cssHref)].map(([, name]) => name);
+}
+
+test("Every page script, stylesheet and browser module reachable from app.js is served", async (t) => {
   const server = createApp({ apiKey: "", stationToken: "", googleAirKey: "" });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -35,11 +42,21 @@ test("Every page script and browser module reachable from app.js is served as Ja
 
   const modules = [...new Set([...(await pageScripts()), ...(await browserModuleGraph())])];
   assert.ok(modules.includes("theme-boot.js"), "pre-paint theme script is referenced");
-  assert.ok(modules.length >= 8, `expected the full module graph, got ${modules.join(", ")}`);
+  assert.ok(modules.length >= 12, `expected the full module graph, got ${modules.join(", ")}`);
   for (const name of modules) {
     const res = await fetch(`${base}/${name}`);
-    assert.equal(res.status, 200, `${name} must be allowlisted in server.mjs`);
+    assert.equal(res.status, 200, `${name} must be allowlisted in lib/static.mjs`);
     assert.match(res.headers.get("content-type"), /text\/javascript/);
+  }
+
+  const sheets = await pageStylesheets();
+  assert.ok(sheets.length >= 4, `expected modular stylesheets, got ${sheets.join(", ")}`);
+  for (const name of sheets) {
+    const res = await fetch(`${base}/${name}`);
+    assert.equal(res.status, 200, `${name} must be allowlisted in lib/static.mjs`);
+    assert.match(res.headers.get("content-type"), /text\/css/);
+    assert.equal(res.headers.get("x-frame-options"), "DENY");
+    assert.equal(res.headers.get("cross-origin-opener-policy"), "same-origin");
   }
 });
 

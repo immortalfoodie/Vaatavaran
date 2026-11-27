@@ -4,8 +4,10 @@
 import { CITIES } from "./engine.js";
 import { fetchAir, searchLocations } from "./api.js";
 import { renderCityComparison } from "./views.js";
-import { $, el } from "./dom.js";
+import { openModal } from "./dialogs.js";
+import { $, $button, $dialog, $input, el } from "./dom.js";
 
+/** @typedef {import("./types.js").City} City */
 /** @typedef {import("./state.js").CustomCity} CustomCity */
 
 const MIN_QUERY_LENGTH = 2;
@@ -36,7 +38,7 @@ function resultButton(loc, onPick) {
  */
 async function searchAnyCity(query, onSelect) {
   const container = $("#city-search-results");
-  const submit = $("#city-search-submit");
+  const submit = $button("#city-search-submit");
   container.replaceChildren(caption("Searching locations…"));
   submit.disabled = true;
   try {
@@ -60,12 +62,11 @@ async function searchAnyCity(query, onSelect) {
  */
 export function bindCitySearch(onSelect) {
   $("#city-search-open")?.addEventListener("click", () => {
-    $("#city-dialog").showModal();
-    $("#city-query").focus();
+    openModal($dialog("#city-dialog"), $input("#city-query"));
   });
-  $("#city-search-form")?.addEventListener("submit", (/** @type {SubmitEvent} */ event) => {
+  $("#city-search-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const query = $("#city-query").value.trim();
+    const query = $input("#city-query").value.trim();
     if (query.length >= MIN_QUERY_LENGTH) searchAnyCity(query, onSelect);
   });
 }
@@ -77,7 +78,7 @@ export function bindCitySearch(onSelect) {
  * @param {(cityId: string) => void} onPick
  */
 export async function loadCityComparison(activeCityId, onPick) {
-  const btn = $("#compare-load");
+  const btn = $button("#compare-load");
   btn.disabled = true;
   $("#city-compare-list").replaceChildren(
     caption("Fetching live regional readings across cities…"),
@@ -88,9 +89,9 @@ export async function loadCityComparison(activeCityId, onPick) {
       aqi: (await fetchAir(city, "model")).aqi,
     })),
   );
+  /** @type {Array<{ city: City, aqi: number | null }>} */
   const rows = settled
-    .filter((r) => r.status === "fulfilled")
-    .map((r) => /** @type {PromiseFulfilledResult<any>} */ (r).value)
+    .flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
     .sort((a, b) => (b.aqi ?? -1) - (a.aqi ?? -1));
   renderCityComparison(rows, activeCityId, onPick);
   btn.disabled = false;

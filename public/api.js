@@ -2,6 +2,7 @@
  * Browser API client: the only module that talks to the Vaatavaran server.
  * Every call has a deadline and surfaces the server's client-safe error message.
  */
+import { isRecord } from "./guard.js";
 import { SECOND_MS } from "./time.js";
 
 /** @typedef {import("./types.js").Air} Air */
@@ -31,15 +32,20 @@ const HEALTH_TIMEOUT_MS = 5 * SECOND_MS;
 
 /**
  * Fetch JSON with a deadline; throws an Error carrying the server's message on failure.
+ * @template T
  * @param {string} url
  * @param {{ timeoutMs: number, fallbackError: string, init?: RequestInit }} options
- * @returns {Promise<any>}
+ * @returns {Promise<T>}
  */
 async function requestJson(url, { timeoutMs, fallbackError, init = {} }) {
   const response = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  /** @type {unknown} */
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error || fallbackError);
-  return data;
+  if (!response.ok) {
+    const serverError = isRecord(data) && typeof data.error === "string" ? data.error : "";
+    throw new Error(serverError || fallbackError);
+  }
+  return /** @type {T} */ (data);
 }
 
 /**
@@ -79,6 +85,7 @@ export function fetchAir(city, mode) {
  * @returns {Promise<Array<{ name: string, region: string, lat: number, lon: number, zone: string }>>}
  */
 export async function searchLocations(query) {
+  /** @type {{ results?: Array<{ name: string, region: string, lat: number, lon: number, zone: string }> }} */
   const data = await requestJson(`/api/geocode?${new URLSearchParams({ q: query })}`, {
     timeoutMs: SEARCH_TIMEOUT_MS,
     fallbackError: "Search unavailable",
@@ -108,10 +115,11 @@ export function cityContext(cityId, city) {
 
 /**
  * POST a JSON body with a deadline.
+ * @template T
  * @param {string} url
  * @param {Record<string, unknown>} body
  * @param {{ timeoutMs: number, fallbackError: string }} options
- * @returns {Promise<any>}
+ * @returns {Promise<T>}
  */
 function postJson(url, body, options) {
   return requestJson(url, {

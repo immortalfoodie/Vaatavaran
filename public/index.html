@@ -13,6 +13,9 @@
     <title>Vaatavaran · Proactive Air Quality Platform</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/overview.css" />
+    <link rel="stylesheet" href="/features.css" />
+    <link rel="stylesheet" href="/dialogs.css" />
     <script src="/theme-boot.js"></script>
     <script type="module" src="/app.js"></script>
   </head>
@@ -602,7 +605,7 @@
               <p id="clean-room-invalid" class="source-caption" hidden>
                 Enter the room size and the purifier’s CADR to see the estimate.
               </p>
-              <div id="clean-room-result">
+              <div id="clean-room-result" aria-live="polite">
                 <p class="row-key">CLEAN AIR CHANGES PER HOUR</p>
                 <output id="clean-room-ach" class="kpi-number clean-room-ach" for="clean-room-form">—</output>
                 <span id="clean-room-verdict" class="status-tag unknown"></span>
@@ -669,7 +672,7 @@
             Compare real-time Open-Meteo/CAMS regional US AQI across major
             Indian cities side by side.
           </p>
-          <div class="compare-grid" id="city-compare-list">
+          <div class="compare-grid" id="city-compare-list" aria-live="polite">
             <p class="source-caption">
               Click <strong>COMPARE INDIAN CITIES</strong> to load live readings
               across cities.
@@ -692,7 +695,8 @@
             <div
               class="density-grid"
               id="exposure-matrix"
-              aria-hidden="true"
+              role="img"
+              aria-label="12-hour relative exposure intensity heatmap"
             ></div>
           </section>
 
@@ -743,7 +747,8 @@
             <div
               class="amplification-chart"
               id="impact-chart"
-              aria-hidden="true"
+              role="img"
+              aria-label="Commute carbon comparison between public transit and solo car"
             ></div>
 
             <p class="source-caption" id="carbon-formula"></p>

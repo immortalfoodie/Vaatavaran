@@ -30,7 +30,8 @@ export default [
       complexity: ["error", 14],
       "max-depth": ["error", 3],
       "max-params": ["error", 4],
-      "max-lines-per-function": ["warn", { max: 80, skipBlankLines: true, skipComments: true }],
+      "max-lines-per-function": ["error", { max: 70, skipBlankLines: true, skipComments: true }],
+      "max-lines": ["error", { max: 450, skipBlankLines: true, skipComments: true }],
       // JSDoc: document every exported API; types are checked by `tsc --checkJs`.
       "jsdoc/require-jsdoc": [
         "error",
@@ -42,8 +43,7 @@ export default [
       "jsdoc/require-returns": "off",
       "jsdoc/require-param": "off",
       "jsdoc/tag-lines": "off",
-      // `any` is reserved for raw provider payloads, which are validated field-by-field at runtime.
-      "jsdoc/reject-any-type": "off",
+      "jsdoc/reject-any-type": "error",
     },
   },
   {
@@ -52,6 +52,10 @@ export default [
   },
   {
     files: ["test/**/*.mjs"],
-    rules: { "max-lines-per-function": "off", "jsdoc/require-jsdoc": "off" },
+    rules: {
+      "max-lines-per-function": "off",
+      "max-lines": "off",
+      "jsdoc/require-jsdoc": "off",
+    },
   },
 ];

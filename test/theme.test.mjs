@@ -5,6 +5,7 @@ import {
   DEFAULT_THEME,
   THEMES,
   THEME_STORAGE_KEY,
+  bindThemeToggle,
   nextTheme,
   normalizeTheme,
   themeButtonLabel,
@@ -50,4 +51,92 @@ test("Every colour token that changes between themes is defined once with light-
   assert.match(css, /:root\[data-theme="auto"\]\s*\{\s*color-scheme: light dark;/);
   const root = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
   assert.ok((root.match(/light-dark\(/g) || []).length >= 30);
+});
+
+test("bindThemeToggle syncs document theme, meta tags, storage and cycles cleanly", () => {
+  const store = new Map();
+  const root = { dataset: {} };
+  const metas = [
+    {
+      attrs: new Map([
+        ["media", "(prefers-color-scheme: light)"],
+        ["content", "#f7f8f3"],
+      ]),
+      getAttribute(k) {
+        return this.attrs.get(k) ?? null;
+      },
+      setAttribute(k, v) {
+        this.attrs.set(k, v);
+      },
+    },
+    {
+      attrs: new Map([
+        ["media", "(prefers-color-scheme: dark)"],
+        ["content", "#f7f8f3"],
+      ]),
+      getAttribute(k) {
+        return this.attrs.get(k) ?? null;
+      },
+      setAttribute(k, v) {
+        this.attrs.set(k, v);
+      },
+    },
+  ];
+  const icon = { textContent: "" };
+  const label = { textContent: "" };
+  let onClick = null;
+  const button = {
+    dataset: {},
+    title: "",
+    attrs: new Map(),
+    setAttribute(k, v) {
+      this.attrs.set(k, v);
+    },
+    querySelector(sel) {
+      return sel === ".theme-toggle-icon" ? icon : label;
+    },
+    addEventListener(event, fn) {
+      if (event === "click") onClick = fn;
+    },
+  };
+
+  const prevDoc = globalThis.document;
+  const prevStorage = globalThis.localStorage;
+  globalThis.document = {
+    documentElement: root,
+    querySelectorAll: () => metas,
+  };
+  globalThis.localStorage = {
+    getItem: (k) => store.get(k) ?? null,
+    setItem: (k, v) => store.set(k, v),
+    removeItem: (k) => store.delete(k),
+  };
+
+  try {
+    bindThemeToggle(null);
+    bindThemeToggle(button);
+    assert.equal(root.dataset.theme, undefined);
+    assert.equal(label.textContent, "LIGHT");
+    assert.equal(metas[1].attrs.get("content"), "#f7f8f3");
+
+    onClick();
+    assert.equal(root.dataset.theme, "dark");
+    assert.equal(store.get(THEME_STORAGE_KEY), "dark");
+    assert.equal(label.textContent, "DARK");
+    assert.equal(metas[0].attrs.get("content"), "#10150d");
+
+    onClick();
+    assert.equal(root.dataset.theme, "auto");
+    assert.equal(store.get(THEME_STORAGE_KEY), "auto");
+    assert.equal(metas[0].attrs.get("content"), "#f7f8f3");
+    assert.equal(metas[1].attrs.get("content"), "#10150d");
+
+    onClick();
+    assert.equal(root.dataset.theme, undefined);
+    assert.equal(store.has(THEME_STORAGE_KEY), false);
+    assert.equal(label.textContent, "LIGHT");
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.localStorage = prevStorage;
+  }
 });
