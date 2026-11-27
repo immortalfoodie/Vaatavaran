@@ -46,6 +46,8 @@ const STATIC_FILES = new Map([
   ["/format.js", "format.js"],
   ["/state.js", "state.js"],
   ["/storage.js", "storage.js"],
+  ["/theme.js", "theme.js"],
+  ["/theme-boot.js", "theme-boot.js"],
   ["/time.js", "time.js"],
   ["/views.js", "views.js"],
   ["/style.css", "style.css"],

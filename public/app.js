@@ -21,6 +21,7 @@ import {
   persistState,
 } from "./state.js";
 import { $, el, setLoadingRegion } from "./dom.js";
+import { bindThemeToggle } from "./theme.js";
 import { MINUTE_MS, SECOND_MS } from "./time.js";
 
 /** @typedef {import("./types.js").DataMode} DataMode */
@@ -517,6 +518,7 @@ function applyHealth(health) {
 }
 
 function init() {
+  bindThemeToggle($("#theme-toggle"));
   populateCitySelect();
   $("#data-mode").value = state.mode;
   bindEvents();

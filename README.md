@@ -32,7 +32,7 @@ The app itself has **zero runtime dependencies**. Quality tooling is dev-only:
 
 ```sh
 npm install          # ESLint, Prettier and TypeScript (type checking only; no build step)
-npm run verify       # lint + format + strict type check + 92 tests with coverage + size budget
+npm run verify       # lint + format + strict type check + 97 tests with coverage + size budget
 ```
 
 | Script                  | What it enforces                                                                      |
@@ -60,7 +60,7 @@ The goal is to turn “AQI is high” into **what to change, why it matters, and
 - **Impact calculator:** inspect the assumptions behind an illustrative car-to-transit carbon comparison. Estimates are never represented as measured savings or health improvements.
 - **Contextual assistant:** optional real generative AI, with a clearly labeled deterministic local guide when disabled or unavailable. Emergency symptom patterns bypass AI.
 - **Daily checklist:** browser-local progress; resets when household context changes. Plain-text household and community exports omit explicit health preferences.
-- **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support, responsive layouts, a dark theme that follows the operating-system preference, and skeleton placeholders (with `aria-busy`) instead of misleading "unavailable" text while data loads.
+- **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support, responsive layouts, a light/dark theme that follows the operating system by default, with a header toggle (Auto → Light → Dark) that is remembered and applied before first paint, and skeleton placeholders (with `aria-busy`) instead of misleading "unavailable" text while data loads.
 
 ## Enable Gemini on the free tier
 
@@ -136,6 +136,8 @@ public/dom.js            `$` / `el` helpers (textContent only, never innerHTML)
 public/engine.js         Shared pure AQI, planning, readiness, impact and local-guide logic
 public/aqi-scales.js     US EPA and India CPCB NAQI breakpoints and sub-index interpolation
 public/format.js         Locale-aware clock times and "4 minutes ago" relative ages
+public/theme.js          Auto / Light / Dark theme toggle (CSS tokens use light-dark())
+public/theme-boot.js     Applies a saved theme before first paint (CSP-safe, no inline script)
 public/time.js           Shared time-unit constants (browser + server)
 public/types.js          JSDoc type definitions (type checking only; never served)
 server.mjs               HTTP server & Vercel handler: routing, security headers, handlers
@@ -169,7 +171,7 @@ For Internet hosting, run behind HTTPS, set `HOST=0.0.0.0` and `APP_ORIGIN=https
 
 ## Validation
 
-`npm run verify` runs 92 deterministic tests without external network or paid AI calls, and fails if coverage drops below the configured thresholds. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling, provider fallbacks, rate-limit windows, request-body limits, custom-coordinate bounds, export privacy, API keys kept out of URLs, India NAQI bands (including CPCB’s published interpolation examples), relative-time formatting, and a check that every browser module is allowlisted by the server.
+`npm run verify` runs 97 deterministic tests without external network or paid AI calls, and fails if coverage drops below the configured thresholds. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling, provider fallbacks, rate-limit windows, request-body limits, custom-coordinate bounds, export privacy, API keys kept out of URLs, India NAQI bands (including CPCB’s published interpolation examples), relative-time formatting, theme toggle and theme-token consistency, and a check that every browser module is allowlisted by the server.
 
 Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persisted checklist state, city switching, assistant responses, literal rendering of HTML-like input, export downloads, impact calculations, simulated live outage and keyboard dialog dismissal. See [validation notes](docs/VALIDATION.md) for final results and limitations.
 

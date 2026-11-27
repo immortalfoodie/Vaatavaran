@@ -20,13 +20,21 @@ async function browserModuleGraph() {
   return [...seen];
 }
 
-test("Every browser module reachable from app.js is served as JavaScript", async (t) => {
+/** Classic and module scripts referenced directly by index.html. */
+async function pageScripts() {
+  const html = await readFile(new URL("index.html", PUBLIC_DIR), "utf8");
+  const scriptSrc = /<script\b[^>]*\bsrc="\/([\w-]+\.js)"/g;
+  return [...html.matchAll(scriptSrc)].map(([, name]) => name);
+}
+
+test("Every page script and browser module reachable from app.js is served as JavaScript", async (t) => {
   const server = createApp({ apiKey: "", stationToken: "", googleAirKey: "" });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}`;
 
-  const modules = await browserModuleGraph();
+  const modules = [...new Set([...(await pageScripts()), ...(await browserModuleGraph())])];
+  assert.ok(modules.includes("theme-boot.js"), "pre-paint theme script is referenced");
   assert.ok(modules.length >= 8, `expected the full module graph, got ${modules.join(", ")}`);
   for (const name of modules) {
     const res = await fetch(`${base}/${name}`);

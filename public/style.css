@@ -1,49 +1,50 @@
 /* Clinical Biotech UI System — Spacious, readable Pulmify-inspired layout */
 :root {
-  --bg: #f7f8f3;
-  --surface: #efefe8;
-  --surface-bright: #fbfbf8;
-  --forest: #23371b;
-  --forest-hover: #192913;
-  --pistachio: #d8e6bc;
-  --pistachio-soft: #e6eed5;
-  --pistachio-hover: #cbe0a8;
-  --olive-1: #f5f6f0;
-  --olive-2: #c4ceb2;
-  --olive-3: #7c8f61;
-  --olive-4: #4d5e38;
-  --border-dash: #b5b9a6;
-  --border-solid: #c9cdba;
-  --ink: #1b2516;
-  --ink-2: #444f3e;
-  --muted: #697462;
-  --status-good: #68804c;
+  --bg: light-dark(#f7f8f3, #10150d);
+  --surface: light-dark(#efefe8, #161d12);
+  --surface-bright: light-dark(#fbfbf8, #1c2517);
+  --forest: light-dark(#23371b, #2b4222);
+  --forest-hover: light-dark(#192913, #35502a);
+  --pistachio: light-dark(#d8e6bc, #3d5a2c);
+  --pistachio-soft: light-dark(#e6eed5, #253420);
+  --pistachio-hover: light-dark(#cbe0a8, #4a6a36);
+  --olive-1: light-dark(#f5f6f0, #1c2517);
+  --olive-2: light-dark(#c4ceb2, #34442a);
+  --olive-3: light-dark(#7c8f61, #5e7747);
+  --olive-4: light-dark(#4d5e38, #8fae6a);
+  --border-dash: light-dark(#b5b9a6, #4b5642);
+  --border-solid: light-dark(#c9cdba, #353f2e);
+  --ink: light-dark(#1b2516, #e6ecdf);
+  --ink-2: light-dark(#444f3e, #c2cbb7);
+  --muted: light-dark(#697462, #9ba68f);
+  --status-good: light-dark(#68804c, #8fb06a);
   --status-moderate: #e5c170;
-  --status-sensitive: #e39a72;
-  --status-unhealthy: #de857c;
-  --status-very: #b97580;
-  --status-hazardous: #8e4b5d;
-  /* Semantic tokens: components use these, so the dark theme only overrides values. */
-  --accent: #23371b; /* text, borders and chart ink on page surfaces */
+  --status-sensitive: light-dark(#e39a72, #e9a47e);
+  --status-unhealthy: light-dark(#de857c, #e8928a);
+  --status-very: light-dark(#b97580, #c98a95);
+  --status-hazardous: light-dark(#8e4b5d, #b8687c);
+  /* Semantic tokens: components use these roles, never raw colours. */
+  --accent: light-dark(#23371b, #bcd99a); /* text, borders and chart ink on page surfaces */
   --on-forest-accent: #d8e6bc; /* secondary text on brand panels; same in both themes */
-  --surface-raised: #ffffff;
-  --overlay: rgba(255, 255, 255, 0.55);
-  --line: rgba(35, 55, 27, 0.3);
-  --line-soft: rgba(35, 55, 27, 0.12);
-  --topbar-bg: rgba(247, 248, 243, 0.96);
-  --warn-bg: #f5ecd7;
-  --warn-ink: #5c4314;
-  --warn-border: #c8aa68;
-  --danger-bg: #f5dfdc;
-  --danger-ink: #6e2b24;
-  --done-border: #8fa372;
-  --seg-empty: #d2d6c7;
-  --chart-dot: #ebf3db;
-  --skeleton-base: #e4e7dc;
-  --skeleton-shine: #f3f5ee;
+  --surface-raised: light-dark(#ffffff, #24301d);
+  --overlay: light-dark(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.04));
+  --line: light-dark(rgba(35, 55, 27, 0.3), rgba(214, 230, 190, 0.22));
+  --line-soft: light-dark(rgba(35, 55, 27, 0.12), rgba(214, 230, 190, 0.1));
+  --topbar-bg: light-dark(rgba(247, 248, 243, 0.96), rgba(16, 21, 13, 0.94));
+  --warn-bg: light-dark(#f5ecd7, #3a301a);
+  --warn-ink: light-dark(#5c4314, #f1d9a3);
+  --warn-border: light-dark(#c8aa68, #8a7038);
+  --danger-bg: light-dark(#f5dfdc, #3e211e);
+  --danger-ink: light-dark(#6e2b24, #f3bdb5);
+  --done-border: light-dark(#8fa372, #5d7346);
+  --seg-empty: light-dark(#d2d6c7, #2e3828);
+  --chart-dot: light-dark(#ebf3db, #2a3a20);
+  --skeleton-base: light-dark(#e4e7dc, #222b1c);
+  --skeleton-shine: light-dark(#f3f5ee, #2f3a28);
   --radius: 14px;
   --radius-sm: 8px;
   --font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  /* Tokens use light-dark(); color-scheme picks the side (see the theme overrides below). */
   color-scheme: light dark;
   font: 15px/1.55 var(--font-sans);
   color: var(--ink);
@@ -51,49 +52,13 @@
   font-synthesis: none;
 }
 
-/* Dark theme follows the operating-system preference. Brand panels (--forest) stay dark;
-   accent text flips to a light green so it keeps contrast on dark surfaces. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #10150d;
-    --surface: #161d12;
-    --surface-bright: #1c2517;
-    --surface-raised: #24301d;
-    --forest: #2b4222;
-    --forest-hover: #35502a;
-    --accent: #bcd99a;
-    --pistachio: #3d5a2c;
-    --pistachio-soft: #253420;
-    --pistachio-hover: #4a6a36;
-    --olive-1: #1c2517;
-    --olive-2: #34442a;
-    --olive-3: #5e7747;
-    --olive-4: #8fae6a;
-    --border-dash: #4b5642;
-    --border-solid: #353f2e;
-    --ink: #e6ecdf;
-    --ink-2: #c2cbb7;
-    --muted: #9ba68f;
-    --status-good: #8fb06a;
-    --status-sensitive: #e9a47e;
-    --status-unhealthy: #e8928a;
-    --status-very: #c98a95;
-    --status-hazardous: #b8687c;
-    --overlay: rgba(255, 255, 255, 0.04);
-    --line: rgba(214, 230, 190, 0.22);
-    --line-soft: rgba(214, 230, 190, 0.1);
-    --topbar-bg: rgba(16, 21, 13, 0.94);
-    --warn-bg: #3a301a;
-    --warn-ink: #f1d9a3;
-    --warn-border: #8a7038;
-    --danger-bg: #3e211e;
-    --danger-ink: #f3bdb5;
-    --done-border: #5d7346;
-    --seg-empty: #2e3828;
-    --chart-dot: #2a3a20;
-    --skeleton-base: #222b1c;
-    --skeleton-shine: #2f3a28;
-  }
+/* Explicit theme chosen with the header toggle (theme.js); absent = follow the OS. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 *,
@@ -2152,6 +2117,18 @@ dialog::backdrop {
   .density-cell {
     height: 20px;
   }
+}
+
+/* Header colour-theme toggle (Auto / Light / Dark) */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-toggle-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 
 /* India NAQI estimate under the US AQI hero */
