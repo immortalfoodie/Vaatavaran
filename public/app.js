@@ -5,7 +5,7 @@
 import { renderDashboard, renderFreshness } from "./views.js";
 import { renderForecast, renderImpact } from "./charts.js";
 import { clearSavedState, buildPlanText, downloadPlanText } from "./storage.js";
-import { CITIES, DEFAULT_PROFILE, demoAir, normalizeProfile, makePlan } from "./engine.js";
+import { CITIES, DEFAULT_PROFILE, demoAir, impact, normalizeProfile, makePlan } from "./engine.js";
 import { fetchAir, fetchHealth } from "./api.js";
 import { createChat, resetChat } from "./chat.js";
 import { bindCitySearch, loadCityComparison } from "./city-search.js";
@@ -22,12 +22,26 @@ import {
 } from "./state.js";
 import { $, el, setLoadingRegion } from "./dom.js";
 import { bindThemeToggle } from "./theme.js";
+import { bindPlanner } from "./planner-view.js";
+import { bindCleanRoom } from "./clean-room-view.js";
+import { renderMonthlyImpact } from "./history-view.js";
+import {
+  clearHistory,
+  emptyHistory,
+  loadHistory,
+  recordChecklist,
+  recordPlan,
+  saveHistory,
+  summarizeMonth,
+} from "./history.js";
 import { MINUTE_MS, SECOND_MS } from "./time.js";
 
 /** @typedef {import("./types.js").DataMode} DataMode */
 /** @typedef {import("./state.js").AppState} AppState */
 /** @typedef {import("./state.js").CustomCity} CustomCity */
 /** @typedef {import("./api.js").Health} Health */
+/** @typedef {import("./history.js").History} History */
+/** @typedef {import("./planner-view.js").PlannerController} PlannerController */
 
 /** @type {ReadonlySet<string>} */
 const VALID_PAGES = new Set(["today", "plan", "home", "impact"]);
@@ -50,13 +64,19 @@ const PAGE_HEADINGS = {
 /** @type {AppState} */
 const state = createState();
 const city = () => currentCity(state);
-const chat = createChat(() => ({
+/** Current city, data source and household, as read by the chat and the day planner. */
+const snapshot = () => ({
   cityId: state.cityId,
   city: city(),
   mode: state.mode,
   profile: state.profile,
   air: state.air,
-}));
+});
+const chat = createChat(snapshot);
+/** @type {History} Monthly impact, stored only on this device. */
+let history = loadHistory();
+/** @type {PlannerController | null} */
+let planner = null;
 
 /* ---------- Status & persistence ---------- */
 
@@ -84,6 +104,42 @@ function persist() {
 function setMode(mode) {
   state.mode = mode;
   $("#data-mode").value = mode;
+}
+
+/* ---------- Monthly impact history ---------- */
+
+function renderHistory() {
+  const month = dayKey(state).slice(0, 7);
+  renderMonthlyImpact(summarizeMonth(history, month), month);
+}
+
+/**
+ * Apply a change to the stored history and refresh the monthly totals.
+ * @param {(current: History) => History} change
+ */
+function updateHistory(change) {
+  history = change(history);
+  saveHistory(history);
+  renderHistory();
+}
+
+/**
+ * Record today's checklist after the household ticks or unticks an action. Context changes
+ * (city, source, preferences) reset the checklist but never erase what was already recorded.
+ */
+function recordTodayChecklist() {
+  const co2Kg = state.completed.has("commute") ? impact(state.profile).savedKg : 0;
+  updateHistory((current) =>
+    recordChecklist(current, dayKey(state), { completed: state.completed, co2Kg }),
+  );
+}
+
+function clearImpactHistory() {
+  if (!window.confirm("Clear the monthly impact history saved on this device?")) return;
+  clearHistory();
+  history = emptyHistory();
+  renderHistory();
+  setStatus("Monthly impact history cleared from this device.");
 }
 
 /* ---------- Rendering ---------- */
@@ -138,6 +194,7 @@ function render() {
       if (checked) state.completed.add(id);
       else state.completed.delete(id);
       persist();
+      recordTodayChecklist();
     },
     onSelectHour: selectHour,
   });
@@ -383,9 +440,13 @@ function resetSavedData() {
   state.completed.clear();
   resetChat();
   $("#ai-optin").checked = false;
+  clearHistory();
+  history = emptyHistory();
+  planner?.reset();
   render();
+  renderHistory();
   $("#profile-dialog").close();
-  setStatus("Saved preferences, progress and this page’s chat have been reset.");
+  setStatus("Saved preferences, routine, monthly history and this page’s chat have been reset.");
 }
 
 /**
@@ -433,6 +494,7 @@ function bindEvents() {
   onClickAll(["share-plan"], () => exportPlan(false));
   onClickAll(["community-export"], () => exportPlan(true));
   onClickAll(["chat-clear"], resetChat);
+  onClickAll(["impact-clear"], clearImpactHistory);
 
   $("#menu-toggle").addEventListener("click", () => {
     const open = $("#top-nav").classList.toggle("open");
@@ -481,6 +543,7 @@ function refreshAgingContext() {
     state.completed.clear();
     persist();
     render();
+    renderHistory();
   }
   const fetchedAt = state.air.fetchedAt ? Date.parse(state.air.fetchedAt) : 0;
   const stale = Date.now() - fetchedAt > STALE_REFRESH_MS;
@@ -515,10 +578,20 @@ function applyHealth(health) {
   $("#ai-availability").textContent = health.ai
     ? "(Gemini · opt-in)"
     : "(server key not configured)";
+  planner?.setAiAvailable(health.ai);
 }
 
 function init() {
   bindThemeToggle($("#theme-toggle"));
+  bindCleanRoom();
+  planner = bindPlanner({
+    getSnapshot: snapshot,
+    onFollow(summary) {
+      updateHistory((current) => recordPlan(current, dayKey(state), summary));
+      setStatus("Plan saved to this month’s impact on this device.");
+    },
+  });
+  renderHistory();
   populateCitySelect();
   $("#data-mode").value = state.mode;
   bindEvents();

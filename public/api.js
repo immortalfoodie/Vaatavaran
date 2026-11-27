@@ -11,6 +11,7 @@ import { SECOND_MS } from "./time.js";
 const AIR_TIMEOUT_MS = 10 * SECOND_MS;
 const SEARCH_TIMEOUT_MS = 8 * SECOND_MS;
 const CHAT_TIMEOUT_MS = 30 * SECOND_MS;
+const PLAN_TIMEOUT_MS = 30 * SECOND_MS;
 const HEALTH_TIMEOUT_MS = 5 * SECOND_MS;
 
 /**
@@ -86,18 +87,62 @@ export async function searchLocations(query) {
 }
 
 /**
+ * @typedef {object} PlanReply
+ * @property {import("./planner.js").DayPlan} plan
+ * @property {"ai" | "rules"} source Whether Gemini chose and explained the plan.
+ * @property {{ mode: DataMode, source: string }} forecast Which data the forecast came from.
+ * @property {string} [narrative] Gemini's one-paragraph summary.
+ * @property {string} [notice] Why AI was not used, when it was requested.
+ */
+
+/**
+ * Fields the server needs to identify the city: a preset id, or custom coordinates.
+ * @param {string} cityId Preset id or "custom".
+ * @param {City} city
+ * @returns {Record<string, unknown>}
+ */
+export function cityContext(cityId, city) {
+  if (city.id !== "custom") return { city: cityId };
+  return { city: cityId, lat: city.lat, lon: city.lon, cityName: city.name, zone: city.zone };
+}
+
+/**
+ * POST a JSON body with a deadline.
+ * @param {string} url
+ * @param {Record<string, unknown>} body
+ * @param {{ timeoutMs: number, fallbackError: string }} options
+ * @returns {Promise<any>}
+ */
+function postJson(url, body, options) {
+  return requestJson(url, {
+    ...options,
+    init: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  });
+}
+
+/**
  * @param {Record<string, unknown>} context City, mode, profile, question and AI opt-in.
  * @returns {Promise<ChatReply>}
  */
 export function postChat(context) {
-  return requestJson("/api/chat", {
+  return postJson("/api/chat", context, {
     timeoutMs: CHAT_TIMEOUT_MS,
     fallbackError: "The assistant is unavailable.",
-    init: {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(context),
-    },
+  });
+}
+
+/**
+ * @param {Record<string, unknown>} context City, mode, profile, activities and AI opt-in.
+ * @returns {Promise<PlanReply>}
+ */
+export function postDayPlan(context) {
+  return postJson("/api/plan-day", context, {
+    timeoutMs: PLAN_TIMEOUT_MS,
+    fallbackError: "The day planner is unavailable.",
   });
 }
 

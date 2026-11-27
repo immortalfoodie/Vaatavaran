@@ -33,6 +33,7 @@
  * @typedef {object} HourlyPoint
  * @property {string} time ISO timestamp.
  * @property {number} aqi US AQI for the hour.
+ * @property {number | null} [pm25] Forecast PM2.5 (µg/m³) when the source provides it.
  */
 
 /**

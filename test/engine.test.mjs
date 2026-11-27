@@ -94,7 +94,7 @@ test("Demo scenarios are explicit, reproducible and city-specific", () => {
     const data = demoAir(c.id, 1794902400000);
     assert.equal(data.mode, "demo");
     assert.equal(data.aqi, c.demo);
-    assert.equal(data.hourly.length, 12);
+    assert.equal(data.hourly.length, 24);
     assert.equal(data.hourly[0].aqi, data.aqi);
   }
 });
@@ -166,7 +166,7 @@ test("Every preset city has complete, plausible demo data", () => {
     const air = demoAir(city.id, 0);
     assert.ok(isFiniteNumber(air.pm25) && isFiniteNumber(air.pm10), city.id);
     assert.ok(air.pm10 >= air.pm25, `${city.id}: PM10 includes PM2.5`);
-    assert.equal(air.hourly.length, 12);
+    assert.equal(air.hourly.length, 24);
     assert.ok(air.hourly.every((h) => h.aqi >= 12));
   }
 });

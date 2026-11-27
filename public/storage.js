@@ -21,40 +21,63 @@ const COMMUNITY_ACTIONS = [
 ];
 
 /**
- * Safely read saved JSON state from localStorage.
- * @returns {Record<string, any>} Saved object, or {} when missing, corrupt or unavailable.
+ * Read a JSON value from localStorage.
+ * @param {string} key
+ * @returns {unknown} Parsed value, or null when missing, corrupt or storage is unavailable.
  */
-export function loadSavedState() {
+export function loadJson(key) {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return JSON.parse(localStorage.getItem(key) ?? "null");
   } catch {
-    return {};
+    return null;
   }
 }
 
 /**
- * Persist a state snapshot to localStorage.
- * @param {Record<string, unknown>} snapshot
+ * Write a JSON value to localStorage.
+ * @param {string} key
+ * @param {unknown} value
  * @returns {boolean} False when storage is unavailable (private mode, quota, disabled).
  */
-export function saveState(snapshot) {
+export function saveJson(key, value) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch {
     return false;
   }
 }
 
-/** Clear saved preferences and daily completion from localStorage. */
-export function clearSavedState() {
+/**
+ * Remove a key from localStorage, ignoring disabled storage.
+ * @param {string} key
+ */
+export function removeKey(key) {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(key);
   } catch {
     /* Storage may be disabled. */
   }
 }
+
+/**
+ * Saved app state (preferences, city, today's checklist).
+ * @returns {Record<string, any>} Saved object, or {} when missing, corrupt or unavailable.
+ */
+export function loadSavedState() {
+  const value = loadJson(STORAGE_KEY);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+/**
+ * Persist a state snapshot.
+ * @param {Record<string, unknown>} snapshot
+ * @returns {boolean} False when storage is unavailable.
+ */
+export const saveState = (snapshot) => saveJson(STORAGE_KEY, snapshot);
+
+/** Clear saved preferences and daily completion. */
+export const clearSavedState = () => removeKey(STORAGE_KEY);
 
 /**
  * Format a privacy-safe plain-text daily or community checklist.

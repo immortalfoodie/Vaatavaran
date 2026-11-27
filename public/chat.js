@@ -3,7 +3,7 @@
  * Messages live only in the DOM for this page; nothing is persisted.
  */
 import { localAnswer, isEmergency } from "./engine.js";
-import { postChat } from "./api.js";
+import { cityContext, postChat } from "./api.js";
 import { $, el } from "./dom.js";
 
 /** @typedef {import("./types.js").Air} Air */
@@ -49,14 +49,8 @@ export function resetChat() {
  * @param {string} question
  */
 function buildContext(snapshot, question) {
-  const { city } = snapshot;
-  const custom =
-    city.id === "custom"
-      ? { lat: city.lat, lon: city.lon, cityName: city.name, zone: city.zone }
-      : {};
   return {
-    city: snapshot.cityId,
-    ...custom,
+    ...cityContext(snapshot.cityId, snapshot.city),
     mode: snapshot.mode,
     profile: { ...snapshot.profile },
     question,

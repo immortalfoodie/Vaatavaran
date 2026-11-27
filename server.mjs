@@ -6,8 +6,10 @@ import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { CITIES, normalizeProfile, makePlan, localAnswer, isEmergency } from "./public/engine.js";
+import { normalizeActivities } from "./public/planner.js";
 import { createAirService, searchCities } from "./lib/air-quality.mjs";
-import { generateAnswer } from "./lib/assistant.mjs";
+import { aiFallbackNotice, generateAnswer } from "./lib/assistant.mjs";
+import { createDayPlanner } from "./lib/day-plan.mjs";
 import { createRateLimiter } from "./lib/rate-limit.mjs";
 import { HttpError, getClientIp, readJsonBody, resolveCustomCity } from "./lib/request.mjs";
 
@@ -41,9 +43,15 @@ const STATIC_FILES = new Map([
   ["/charts.js", "charts.js"],
   ["/chat.js", "chat.js"],
   ["/city-search.js", "city-search.js"],
+  ["/clean-room.js", "clean-room.js"],
+  ["/clean-room-view.js", "clean-room-view.js"],
   ["/dom.js", "dom.js"],
   ["/engine.js", "engine.js"],
   ["/format.js", "format.js"],
+  ["/history.js", "history.js"],
+  ["/history-view.js", "history-view.js"],
+  ["/planner.js", "planner.js"],
+  ["/planner-view.js", "planner-view.js"],
   ["/state.js", "state.js"],
   ["/storage.js", "storage.js"],
   ["/theme.js", "theme.js"],
@@ -181,11 +189,11 @@ async function handleAir(url, res, airFor) {
 }
 
 /**
- * Reject cross-origin or non-JSON chat requests. Returns an error response, or null when allowed.
+ * Reject cross-origin or non-JSON POST requests. Returns an error response, or null when allowed.
  * @param {Request} req
  * @returns {{ status: number, error: string } | null}
  */
-function rejectUntrustedChat(req) {
+function rejectUntrustedPost(req) {
   const proto = req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
   const expectedOrigin = process.env.APP_ORIGIN || `${proto}://${req.headers.host}`;
   if (req.headers.origin && req.headers.origin !== expectedOrigin) {
@@ -209,20 +217,21 @@ function rejectUntrustedChat(req) {
  */
 
 /**
- * @typedef {object} ChatRequest
+ * @typedef {object} RequestContext Validated city, data mode and household shared by POST APIs.
  * @property {City} city
  * @property {DataMode} mode
- * @property {string} question
  * @property {import("./public/types.js").Profile} profile
  * @property {boolean} useAI Explicit per-page opt-in to generative AI.
  */
 
+/** @typedef {RequestContext & { question: string }} ChatRequest */
+
 /**
- * Validate an untrusted chat body. Returns null when anything is missing or out of bounds.
+ * Validate the city, mode and household of an untrusted POST body.
  * @param {any} body
- * @returns {ChatRequest | null}
+ * @returns {RequestContext | null} Null when the city or mode is missing or invalid.
  */
-function parseChatRequest(body) {
+function parseContext(body) {
   if (!body || typeof body !== "object") return null;
   const city = resolveCity(body.city, {
     lat: body.lat,
@@ -230,25 +239,28 @@ function parseChatRequest(body) {
     name: body.cityName,
     zone: body.zone,
   });
-  const { question, mode } = body;
-  const validQuestion =
-    typeof question === "string" && question.trim() !== "" && question.length <= MAX_QUESTION_LEN;
-  if (!city || !VALID_MODES.has(mode) || !validQuestion) return null;
+  if (!city || !VALID_MODES.has(body.mode)) return null;
+  // Demo scenarios exist only for preset cities; a custom city must never borrow one.
+  if (city.id.startsWith("custom:") && body.mode === "demo") return null;
   return {
     city,
-    mode,
-    question,
+    mode: body.mode,
     profile: normalizeProfile(body.profile),
     useAI: body.useAI === true,
   };
 }
 
-/** @param {unknown} error */
-function aiFallbackNotice(error) {
-  const quota = /** @type {{ quota?: boolean }} */ (error)?.quota === true;
-  return quota
-    ? "Gemini’s free-tier quota is temporarily exhausted. The local guide answered instead; try AI later."
-    : "AI is unavailable; the local guide answered instead.";
+/**
+ * Validate an untrusted chat body. Returns null when anything is missing or out of bounds.
+ * @param {any} body
+ * @returns {ChatRequest | null}
+ */
+function parseChatRequest(body) {
+  const context = parseContext(body);
+  const question = body?.question;
+  const validQuestion =
+    typeof question === "string" && question.trim() !== "" && question.length <= MAX_QUESTION_LEN;
+  return context && validQuestion ? { ...context, question } : null;
 }
 
 /**
@@ -286,7 +298,7 @@ async function answerWithAi(chat, air, { fetcher, apiKey = "", model }) {
  * @param {ChatDeps} deps
  */
 async function handleChat(req, res, consumeAi, deps) {
-  const rejection = rejectUntrustedChat(req);
+  const rejection = rejectUntrustedPost(req);
   if (rejection) return sendJson(res, rejection.status, { error: rejection.error });
 
   const chat = parseChatRequest(await readJsonBody(req));
@@ -320,6 +332,27 @@ async function handleChat(req, res, consumeAi, deps) {
 }
 
 /**
+ * POST /api/plan-day: rule-based day plan, optionally chosen and explained by Gemini.
+ * @param {Request} req
+ * @param {Response} res
+ * @param {() => boolean} consumeAi Spend one AI request from the client's quota.
+ * @param {ReturnType<typeof createDayPlanner>} planForDay
+ */
+async function handlePlanDay(req, res, consumeAi, planForDay) {
+  const rejection = rejectUntrustedPost(req);
+  if (rejection) return sendJson(res, rejection.status, { error: rejection.error });
+
+  const body = await readJsonBody(req);
+  const context = parseContext(body);
+  const activities = normalizeActivities(body?.activities);
+  if (!context || !activities.length) {
+    return sendJson(res, 400, { error: "Add at least one activity with a valid time." });
+  }
+  const result = await planForDay({ ...context, activities, consumeAi });
+  return sendJson(res, result.status, result.body);
+}
+
+/**
  * @typedef {object} HandlerOptions
  * @property {typeof fetch} [fetcher] Injected fetch (mocked in tests).
  * @property {string} [apiKey] Gemini API key.
@@ -344,8 +377,27 @@ export function createHandler({
 } = {}) {
   const airFor = createAirService(fetcher, clock, stationToken, googleAirKey);
   const limiter = createRateLimiter(clock);
+  const planForDay = createDayPlanner({ airFor, fetcher, apiKey, model });
   /** @type {Map<string, { mtimeMs: number, content: Buffer }>} */
   const staticCache = new Map();
+
+  /**
+   * @param {Request} req
+   * @param {Response} res
+   * @param {URL} url
+   */
+  /**
+   * Rate-limited API endpoints, keyed by "METHOD /path".
+   * @type {Record<string, (req: Request, res: Response, url: URL, bucket: RateBucket) => Promise<void>>}
+   */
+  const apiRoutes = {
+    "GET /api/geocode": (_req, res, url) => handleGeocode(url, res, fetcher),
+    "GET /api/air": (_req, res, url) => handleAir(url, res, airFor),
+    "POST /api/plan-day": (req, res, _url, bucket) =>
+      handlePlanDay(req, res, () => limiter.consumeAi(bucket), planForDay),
+    "POST /api/chat": (req, res, _url, bucket) =>
+      handleChat(req, res, () => limiter.consumeAi(bucket), { fetcher, airFor, apiKey, model }),
+  };
 
   /**
    * @param {Request} req
@@ -370,21 +422,9 @@ export function createHandler({
     const limit = limiter.check(getClientIp(req));
     if (!limit.ok) return sendJson(res, limit.status, { error: limit.error });
 
-    if (url.pathname === "/api/geocode" && req.method === "GET") {
-      return handleGeocode(url, res, fetcher);
-    }
-    if (url.pathname === "/api/air" && req.method === "GET") {
-      return handleAir(url, res, airFor);
-    }
-    if (url.pathname === "/api/chat" && req.method === "POST") {
-      return handleChat(req, res, () => limiter.consumeAi(limit.bucket), {
-        fetcher,
-        airFor,
-        apiKey,
-        model,
-      });
-    }
-    return sendJson(res, 404, { error: "Not found" });
+    const endpoint = apiRoutes[`${req.method} ${url.pathname}`];
+    if (!endpoint) return sendJson(res, 404, { error: "Not found" });
+    return endpoint(req, res, url, limit.bucket);
   }
 
   return async (req, res) => {

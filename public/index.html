@@ -444,6 +444,41 @@
             </div>
           </section>
         </div>
+
+        <section class="panel day-planner" aria-labelledby="day-planner-head">
+          <div class="panel-head">
+            <h2 id="day-planner-head">PLAN MY DAY</h2>
+            <span class="panel-meta">NEXT 24 HOURS</span>
+          </div>
+          <p class="panel-subcopy">
+            List what your household does today. Activities marked
+            <strong>Can move</strong> are shifted to the cleanest hours in the
+            forecast (between 6 am and 10 pm); fixed ones get precautions instead.
+            Times that have already passed today are planned for tomorrow.
+          </p>
+          <form id="day-planner-form">
+            <div id="routine-rows" class="routine-rows"></div>
+            <div class="planner-actions">
+              <button type="button" class="bracket-btn" id="routine-add">
+                [+] ADD ACTIVITY
+              </button>
+              <label class="check-row">
+                <input type="checkbox" id="plan-ai-optin" disabled />
+                Let Gemini choose and explain
+                <span id="plan-ai-availability" class="source-caption">(checking…)</span>
+              </label>
+              <button type="submit" class="btn btn-dark" id="plan-day-submit">
+                PLAN MY DAY →
+              </button>
+            </div>
+            <p class="source-caption">
+              With Gemini on, your activity names, times and household sensitivity
+              are sent to Google. Gemini can only pick start times the rule engine has
+              already checked; anything else falls back to the rule-based plan.
+            </p>
+          </form>
+          <div id="day-plan-result" class="day-plan-result" aria-busy="false" hidden></div>
+        </section>
       </section>
 
       <!-- VIEW 3: A HEALTHIER HOME -->
@@ -519,10 +554,110 @@
             </p>
           </article>
         </div>
+
+        <section class="panel clean-room" aria-labelledby="clean-room-head">
+          <div class="panel-head">
+            <h2 id="clean-room-head">CLEAN-ROOM CALCULATOR</h2>
+            <span class="panel-meta">IS MY PURIFIER ENOUGH?</span>
+          </div>
+          <div class="clean-room-grid">
+            <form id="clean-room-form" class="form-grid clean-room-form">
+              <label>
+                ROOM LENGTH (M)
+                <input name="length" type="number" min="1" max="50" step="0.1" value="4" required />
+              </label>
+              <label>
+                ROOM WIDTH (M)
+                <input name="width" type="number" min="1" max="50" step="0.1" value="3.5" required />
+              </label>
+              <label>
+                CEILING HEIGHT (M)
+                <input name="height" type="number" min="2" max="10" step="0.1" value="3" required />
+              </label>
+              <fieldset class="clean-room-source">
+                <legend>AIR CLEANER</legend>
+                <label class="check-row">
+                  <input type="radio" name="source" value="own" checked />
+                  My purifier (enter its CADR)
+                </label>
+                <label class="check-row">
+                  <input type="radio" name="source" value="diy" />
+                  DIY box-fan filter (~350 m³/h)
+                </label>
+              </fieldset>
+              <label>
+                CADR (CLEAN AIR DELIVERY RATE)
+                <input id="clean-room-cadr" name="cadr" type="number" min="10" max="5000" value="250" />
+              </label>
+              <label>
+                UNIT
+                <select id="clean-room-unit" name="unit">
+                  <option value="m3h">m³/h</option>
+                  <option value="cfm">CFM</option>
+                </select>
+              </label>
+            </form>
+
+            <div class="clean-room-output">
+              <p id="clean-room-invalid" class="source-caption" hidden>
+                Enter the room size and the purifier’s CADR to see the estimate.
+              </p>
+              <div id="clean-room-result">
+                <p class="row-key">CLEAN AIR CHANGES PER HOUR</p>
+                <output id="clean-room-ach" class="kpi-number clean-room-ach" for="clean-room-form">—</output>
+                <span id="clean-room-verdict" class="status-tag unknown"></span>
+                <p id="clean-room-time"></p>
+                <p id="clean-room-target" class="source-caption"></p>
+              </div>
+              <details class="scale-explainer">
+                <summary>BUILD A LOW-COST DIY FILTER</summary>
+                <p>
+                  A Corsi-Rosenthal box is four MERV-13 furnace filters taped into a
+                  cube with a box fan on top, blowing outward. First-time builds
+                  measured about 350 m³/h of clean air on average (published range
+                  285–1,448). A single filter strapped to a fan performs far less
+                  well, so it is not estimated here.
+                </p>
+                <p>
+                  Use a fan with a thermal cut-off, keep its motor uncovered, and
+                  never leave a new build running unattended until you have checked
+                  it. Replace filters when they look grey.
+                </p>
+              </details>
+              <p class="source-caption">
+                Estimate for a closed, well-mixed room. Leaky windows, doors and
+                indoor sources make real rooms slower. The 5 air-changes target
+                follows AHAM’s “CADR ≈ ⅔ of floor area” guideline.
+              </p>
+            </div>
+          </div>
+        </section>
       </section>
 
       <!-- VIEW 4: ANALYTICS & IMPACT -->
       <section id="impact-view" class="view" hidden>
+        <section class="panel monthly-impact" aria-labelledby="monthly-impact-head">
+          <div class="panel-head">
+            <h2 id="monthly-impact-head">YOUR IMPACT THIS MONTH</h2>
+            <span class="panel-meta" id="impact-month">THIS MONTH</span>
+          </div>
+          <p id="impact-empty" class="panel-subcopy">
+            Tick off your daily actions or follow a plan from
+            <a href="#plan">Plan my day</a> to start your monthly record.
+          </p>
+          <div id="impact-tiles" class="impact-tiles" hidden></div>
+          <div class="monthly-impact-foot">
+            <p class="source-caption">
+              Stored only on this device. CO₂ uses the illustrative car → transit
+              factors; particle savings compare the same activity at its usual and
+              planned time. Estimates, not health outcomes.
+            </p>
+            <button type="button" class="bracket-btn" id="impact-clear">
+              [×] CLEAR HISTORY
+            </button>
+          </div>
+        </section>
+
         <section class="panel compare-panel" aria-labelledby="compare-head">
           <div class="panel-head">
             <h2 id="compare-head">LIVE CITY COMPARISON</h2>
@@ -731,12 +866,32 @@
           </p>
         </li>
         <li>
-          <span class="row-key">04 · TRACK, SHARE &amp; ASK AI</span>
-          <strong>Turn guidance into daily habits</strong>
+          <span class="row-key">04 · PLAN YOUR DAY</span>
+          <strong>Move outdoor activities to cleaner hours</strong>
           <p>
-            Check off your 3 priorities, tap <strong>COPY PLAN</strong> to share
-            with family, explore <strong>ANALYTICS</strong> to compare cities,
-            or open <strong>AI ASSISTANT</strong> for tailored answers.
+            In <strong>DAILY PLAN → Plan my day</strong>, list walks, school runs or
+            exercise with their usual times and tick <strong>Can move</strong> for
+            the flexible ones. You get a timeline showing when to go and how many
+            fewer particles you breathe. Opt in to let Gemini choose and explain.
+          </p>
+        </li>
+        <li>
+          <span class="row-key">05 · CHECK YOUR CLEAN ROOM</span>
+          <strong>Is your purifier enough?</strong>
+          <p>
+            In <strong>HOME GUIDE</strong>, enter your room size and purifier rating
+            (or try the DIY box-fan option) to see air changes per hour and how long
+            the room takes to clear.
+          </p>
+        </li>
+        <li>
+          <span class="row-key">06 · TRACK, SHARE &amp; ASK AI</span>
+          <strong>See your impact add up</strong>
+          <p>
+            Tick off your 3 priorities and follow day plans; <strong>ANALYTICS</strong>
+            shows this month’s totals (kept only on this device). Tap
+            <strong>COPY PLAN</strong> to share, use the ☀ / ☾ button to switch
+            theme, or open <strong>AI ASSISTANT</strong> for tailored answers.
           </p>
         </li>
       </ol>

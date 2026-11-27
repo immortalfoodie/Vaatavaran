@@ -115,6 +115,21 @@ export function usAqiFromPm(pm25, pm10) {
 }
 
 /**
+ * Approximate PM2.5 (µg/m³) for a US AQI value by inverting the PM2.5 breakpoints.
+ * Used only when a forecast hour has AQI but no PM2.5, so it assumes PM2.5 drives the AQI;
+ * callers must label results that depend on it as estimates.
+ * @param {unknown} aqi US AQI.
+ * @returns {number | null}
+ */
+export function pm25FromUsAqi(aqi) {
+  if (!isFiniteNumber(aqi) || aqi < 0) return null;
+  const row = US_PM25.find(([, , , iHigh]) => aqi <= iHigh) ?? US_PM25[US_PM25.length - 1];
+  const [cLow, cHigh, iLow, iHigh] = row;
+  const index = Math.min(Math.max(aqi, iLow), iHigh);
+  return Number((cLow + ((index - iLow) * (cHigh - cLow)) / (iHigh - iLow)).toFixed(1));
+}
+
+/**
  * @typedef {object} NaqiReading
  * @property {number} aqi India NAQI value (0–500).
  * @property {string} label CPCB category name.

@@ -11,7 +11,7 @@
     "start": "node --env-file-if-exists=.env server.mjs",
     "dev": "node --watch --env-file-if-exists=.env server.mjs",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=90 --test-coverage-include=lib/** --test-coverage-include=public/engine.js --test-coverage-include=public/time.js --test-coverage-include=public/aqi-scales.js --test-coverage-include=public/format.js --test-coverage-include=public/theme.js --test-coverage-include=server.mjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=90 --test-coverage-include=lib/** --test-coverage-include=public/engine.js --test-coverage-include=public/time.js --test-coverage-include=public/aqi-scales.js --test-coverage-include=public/format.js --test-coverage-include=public/theme.js --test-coverage-include=public/planner.js --test-coverage-include=public/clean-room.js --test-coverage-include=public/history.js --test-coverage-include=server.mjs",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

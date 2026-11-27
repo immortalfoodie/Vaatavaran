@@ -14,8 +14,13 @@ const MAX_AQI = 500;
 const MAX_DISTANCE_KM = 100;
 const DEFAULT_DISTANCE_KM = 12;
 const MIN_DEMO_AQI = 12;
-/** Demo hourly shape: AQI offsets from the city's demo value for the next 12 hours. */
-const DEMO_HOURLY_OFFSETS = [0, 8, 13, 4, -15, -32, -49, -55, -43, -29, -10, 6];
+/** Hours shown in the outlook chart and searched for the "best hour". */
+export const OUTLOOK_HOURS = 12;
+/** Demo hourly shape: AQI offsets from the city's demo value for the next 24 hours. */
+const DEMO_HOURLY_OFFSETS = [
+  0, 8, 13, 4, -15, -32, -49, -55, -43, -29, -10, 6, 14, 18, 12, 2, -8, -20, -34, -46, -52, -40,
+  -24, -6,
+];
 /**
  * Illustrative per-passenger CO₂ factors (kg/km), not a verified carbon inventory.
  * @type {Record<import("./types.js").Commute, number>}
@@ -230,12 +235,13 @@ export function demoAir(cityId, now = Date.now()) {
 }
 
 /**
- * Lowest valid AQI hour in the outlook.
+ * Lowest valid AQI hour in the 12-hour outlook.
  * @param {Air} air
  * @returns {HourlyPoint | null}
  */
 export function bestWindow(air) {
   return (air.hourly || [])
+    .slice(0, OUTLOOK_HOURS)
     .filter((h) => category(h.aqi).level >= 0)
     .reduce(
       (/** @type {HourlyPoint | null} */ best, h) => (!best || h.aqi < best.aqi ? h : best),
@@ -386,7 +392,7 @@ function homeCard(profile, risk) {
  * @param {Profile} profile
  * @returns {boolean}
  */
-function isHighRisk(band, profile) {
+export function isHighRisk(band, profile) {
   return band.level >= LEVEL.UNHEALTHY || (profile.sensitive && band.level >= LEVEL.SENSITIVE);
 }
 

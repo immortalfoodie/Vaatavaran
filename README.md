@@ -32,7 +32,7 @@ The app itself has **zero runtime dependencies**. Quality tooling is dev-only:
 
 ```sh
 npm install          # ESLint, Prettier and TypeScript (type checking only; no build step)
-npm run verify       # lint + format + strict type check + 97 tests with coverage + size budget
+npm run verify       # lint + format + strict type check + 131 tests with coverage + size budget
 ```
 
 | Script                  | What it enforces                                                                      |
@@ -59,6 +59,10 @@ The goal is to turn “AQI is high” into **what to change, why it matters, and
 - **A healthier home:** practical source control, ventilation and filtration guidance, with no-cost options first when appropriate.
 - **Impact calculator:** inspect the assumptions behind an illustrative car-to-transit carbon comparison. Estimates are never represented as measured savings or health improvements.
 - **Contextual assistant:** optional real generative AI, with a clearly labeled deterministic local guide when disabled or unavailable. Emergency symptom patterns bypass AI.
+- **Plan my day (GenAI at the centre):** the household lists today's activities (walks, school runs, exercise, airing the home) with their usual times and marks which can move. A deterministic planner reads the 24-hour forecast and moves flexible activities into the cleanest waking hours, keeps fixed ones with precautions, and moves strenuous activity indoors when even the best hour is unhealthy for the household. With opt-in, **Gemini chooses among the rule-checked options and explains each step** through structured JSON output; every choice is validated (only offered times, no clashes) and anything invalid falls back to the rule-based step.
+- **Direct impact of each choice:** every moved activity shows how many fewer particles are breathed, comparing the same activity at its usual and planned time (PM2.5 × minutes, so breathing rate cancels out). No absolute dose or health benefit is claimed.
+- **Clean-room calculator:** room size plus purifier CADR (m³/h or CFM), or a DIY Corsi-Rosenthal box (~350 m³/h measured for first-time builds), gives clean air changes per hour, time to remove ~90% of particles, and the CADR needed for AHAM's ~5 air changes per hour.
+- **Monthly impact:** checklist actions, illustrative CO₂ avoided, activities moved and particle savings from followed plans add up per month, stored only in the browser (last 120 days) and clearable at any time.
 - **Daily checklist:** browser-local progress; resets when household context changes. Plain-text household and community exports omit explicit health preferences.
 - **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support, responsive layouts, a light theme by default with a header toggle (Light → Dark → Auto, where Auto follows the operating system) that is remembered and applied before first paint, and skeleton placeholders (with `aria-busy`) instead of misleading "unavailable" text while data loads.
 
@@ -78,7 +82,7 @@ The server calls Gemini’s `generateContent` API directly, without an SDK or pa
 
 Your key stays on the server; `.env` is ignored by Git. Never paste keys into source files or the assistant. **Free-tier content may be used by Google to improve its products**, so the UI requires explicit opt-in and warns against entering personal details.
 
-Gemini receives the selected city, question, normalized household preferences, server-verified air data and deterministic plan. Quota errors, blocked/truncated answers and provider outages return a labeled local-guide answer. No automatic retries burn through your quota. The rule-based plan remains independent because generated advice can be wrong.
+Gemini receives the selected city, question, normalized household preferences, server-verified air data and deterministic plan. For **Plan my day** it receives the city, whether the household is sensitive, and each activity's name, duration and rule-checked time options; it must answer in the `responseJsonSchema` format and may only pick from those options. Quota errors, blocked/truncated answers and provider outages return a labeled local-guide answer. No automatic retries burn through your quota. The rule-based plan remains independent because generated advice can be wrong.
 
 **Without a key, the local guide works but is not generative AI.** Each question is independent. Emergency guidance runs on-device and on the server without waiting for either external provider.
 
@@ -114,8 +118,9 @@ Categories use **US AQI**: 0–50, 51–100, 101–150, 151–200, 201–300, 30
 4. The carbon scenario assumes **0.17 kg CO₂/km for solo car** and **0.06 kg CO₂/passenger-km for transit**. These are explicit illustrative constants, not locally validated emission factors. Distance is total daily travel, not one-way distance. Actual occupancy, power source, traffic and vehicles change results.
 5. Lower emissions and lower personal exposure are different objectives. A transit switch is not always feasible or cleaner for the passenger. Severe air-quality guidance takes priority.
 6. The household plan may reveal preferences indirectly through adapted actions even though exports exclude explicit sensitivity fields. Review an export before sharing it.
-7. The MVP has 10 preset cities plus search (demo scenarios exist only for presets), English content, no user accounts and no long-term history. It does not send notifications or invent community activity. Each assistant question is independent and uses the current household context.
+7. The MVP has 10 preset cities plus search (demo scenarios exist only for presets), English content, no user accounts and only device-local history (120 days). It does not send notifications or invent community activity. Each assistant question is independent and uses the current household context.
 8. This is educational support, not emergency or clinical care. Severe breathing difficulty or chest pain requires urgent local medical help.
+9. Day planning works hour by hour on the forecast; activities whose usual time has passed are planned for tomorrow. Particle savings are relative estimates from forecast PM2.5 (or PM2.5 estimated from US AQI when a forecast hour has none, which is flagged). Clean-room times assume a closed, well-mixed room; leaks, doors and indoor sources make real rooms slower.
 
 ## Architecture
 
@@ -138,6 +143,12 @@ public/aqi-scales.js     US EPA and India CPCB NAQI breakpoints and sub-index in
 public/format.js         Locale-aware clock times and "4 minutes ago" relative ages
 public/theme.js          Light (default) / Dark / Auto theme toggle (CSS tokens use light-dark())
 public/theme-boot.js     Applies a saved theme before first paint (CSP-safe, no inline script)
+public/planner.js        Pure day planner: forecast slots, exposure windows, scheduling rules
+public/planner-view.js   "Plan my day" form and timeline
+public/clean-room.js     Pure clean-room maths (air changes, clean-down time, sizing)
+public/clean-room-view.js Clean-room calculator form
+public/history.js        Device-local monthly impact history (pure updates + storage)
+public/history-view.js   "Your impact this month" panel
 public/time.js           Shared time-unit constants (browser + server)
 public/types.js          JSDoc type definitions (type checking only; never served)
 server.mjs               HTTP server & Vercel handler: routing, security headers, handlers
@@ -147,7 +158,8 @@ lib/http.mjs             Upstream fetch with deadline + TTL cache with in-flight
 lib/air-quality.mjs      Source selection, Open-Meteo/CAMS parsing, 24h delta, geocoding
 lib/google-air.mjs       Google Air Quality API (500 m) client and US EPA AQI conversion
 lib/station-air.mjs      WAQI ground-station parser and provenance checks
-lib/assistant.mjs        Server-only Gemini adapter and grounding instructions
+lib/assistant.mjs        Server-only Gemini adapter: plain-text answers and schema-bound JSON
+lib/day-plan.mjs         Day-plan service: rule-checked options, Gemini choice validation, fallbacks
 test/*.test.mjs          Unit, API, security, privacy and provider tests (node:test)
 vercel.json              Vercel security headers (mirrors server.mjs)
 eslint.config.js         Lint rules and maintainability budgets
@@ -165,13 +177,14 @@ scripts/check-size.mjs   Source budget check (<10 MB)
 - In-memory per-IP limits: 60 API requests/minute, with at most 8 AI requests/minute; the client table is bounded. `X-Forwarded-For` is trusted only on Vercel or when `TRUST_PROXY=1` is set explicitly.
 - Server API keys are sent to Google in request headers, never in URLs, so they cannot leak into proxy or access logs.
 - Same-origin checks for chat POSTs; no permissive CORS. Gemini requires explicit per-page user opt-in; free-tier provider data-use terms are explained in the UI.
-- No analytics, tracking cookies, database, question logging or client-visible secrets. Preferences and completion are stored only in localStorage; chat stays in memory. **Reset saved data** clears these local settings and the current chat.
+- No analytics, tracking cookies, database, question logging or client-visible secrets. Preferences, completion, the saved routine and monthly impact history are stored only in localStorage; chat stays in memory. **Reset saved data** clears these local settings, the routine, the history and the current chat.
+- `POST /api/plan-day` uses the same origin checks, body limits, rate limits and AI opt-in as chat. Model text is stripped of control characters and length-capped before display.
 
 For Internet hosting, run behind HTTPS, set `HOST=0.0.0.0` and `APP_ORIGIN=https://your-host.example`, and configure the platform’s `PORT`. Before exposing a shared API key publicly, add authentication and persistent/distributed abuse limits to protect the free quota. Keep paid billing disabled for a free-only deployment. In-memory rate limits reset on process restart and may group visitors behind a reverse proxy. Provider retention/processing policies still apply to submitted data.
 
 ## Validation
 
-`npm run verify` runs 97 deterministic tests without external network or paid AI calls, and fails if coverage drops below the configured thresholds. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling, provider fallbacks, rate-limit windows, request-body limits, custom-coordinate bounds, export privacy, API keys kept out of URLs, India NAQI bands (including CPCB’s published interpolation examples), relative-time formatting, theme toggle and theme-token consistency, and a check that every browser module is allowlisted by the server.
+`npm run verify` runs 131 deterministic tests without external network or paid AI calls, and fails if coverage drops below the configured thresholds. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling, provider fallbacks, rate-limit windows, request-body limits, custom-coordinate bounds, export privacy, API keys kept out of URLs, India NAQI bands (including CPCB’s published interpolation examples), relative-time formatting, theme toggle and theme-token consistency, day-plan scheduling (waking hours, fixed activities, indoor swaps, half-hour time zones, data gaps), Gemini choice validation and fallbacks, clean-room maths, monthly history (replacement, retention, tampered storage), and a check that every browser module is allowlisted by the server.
 
 Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persisted checklist state, city switching, assistant responses, literal rendering of HTML-like input, export downloads, impact calculations, simulated live outage and keyboard dialog dismissal. See [validation notes](docs/VALIDATION.md) for final results and limitations.
 
@@ -183,14 +196,18 @@ Try this two-minute walkthrough:
 2. Open household settings; select work-from-home, a purifier and a no-cost budget. Watch the recommendations change and inspect **Why this fits your day**.
 3. Switch to Chennai to see a good-air scenario; switch back to Delhi and notice the conservative activity advice.
 4. Ask “Can my child play outside?” and “Should I open the windows?” Check that the response source is labeled.
-5. Explore **My impact**, change distance, and inspect the assumptions rather than a false precision claim.
-6. Select **Live air data**, inspect source/time labels, and export a checklist.
-7. Configure your API key locally and opt in to demonstrate actual generative explanations.
+5. Open **Daily plan → Plan my day**, keep the sample routine and press **Plan my day**: inspect which activities moved, the particle savings and the stated trade-offs; then press **I'll follow this plan** and see it in **Analytics → Your impact this month**.
+6. In **Home guide**, try the clean-room calculator with your room and the DIY box option.
+7. Explore **My impact**, change distance, and inspect the assumptions rather than a false precision claim.
+8. Select **Live air data**, inspect source/time labels, and export a checklist.
+9. Configure your API key locally and opt in to demonstrate actual generative explanations.
 
 ## Sources and attribution
 
 - Air-quality data: [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api), using [Copernicus Atmosphere Monitoring Service (CAMS)](https://atmosphere.copernicus.eu/). Follow their attribution and licensing terms for deployment; the public endpoint’s free-use terms may not fit commercial traffic.
 - AQI categories: [AirNow AQI Basics](https://www.airnow.gov/aqi/aqi-basics/).
+- DIY purifier performance: first-time Corsi-Rosenthal box builds averaged 352 ± 40 m³/h CADR ([Environ. Sci.: Processes & Impacts, 2025](https://pubs.rsc.org/en/content/articlehtml/2025/em/d4em00406j)); published values range from 285 to 1,448 m³/h. Room sizing follows AHAM's "CADR ≈ ⅔ of floor area" guideline (≈ 5 air changes per hour at an 8-foot ceiling).
+- Day-plan explanations use Gemini [structured output](https://ai.google.dev/gemini-api/docs/generate-content/structured-output) (`responseMimeType` + `responseJsonSchema`); the returned values are validated in `lib/day-plan.mjs`.
 - India National AQI bands: CPCB National Air Quality Index (2014), summarised by [IES Arthapedia](https://ies.gov.in/arthapedia/concept/national-air-quality-index). The open-ended Severe bands use the 380 µg/m³ (PM2.5) and 510 µg/m³ (PM10) upper bounds from CPCB’s AQI calculator so they can be interpolated; values are capped at 500.
 - Particle filtration and source control: [US EPA Indoor Air Filtration](https://www.epa.gov/wildfires/indoor-air-filtration) and [AirNow Be Smoke Ready](https://www.airnow.gov/wildfires/be-smoke-ready/). Particle-reduction guidance does not address every urban gas pollutant.
 - AI integration: [Gemini generateContent API](https://ai.google.dev/api/generate-content), [model availability](https://ai.google.dev/gemini-api/docs/models), and [free-tier pricing and data use](https://ai.google.dev/gemini-api/docs/pricing).
