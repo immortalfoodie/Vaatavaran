@@ -2,24 +2,67 @@
  * CSP-safe SVG and matrix chart renderers (zero inline styles).
  * Renders the 12-hour dot-matrix outlook, hourly exposure heatmap, and CO2 comparison.
  */
-import { category, impact } from "./engine.js";
+import { category, impact, CO2_KG_PER_KM } from "./engine.js";
+import { $, el } from "./dom.js";
+import { formatShortHour, formatTime } from "./format.js";
 
-const $ = (selector) => document.querySelector(selector);
+/** @typedef {import("./types.js").Air} Air */
+/** @typedef {import("./types.js").City} City */
+/** @typedef {import("./types.js").Plan} Plan */
+/** @typedef {import("./types.js").DataMode} DataMode */
+/** @typedef {import("./types.js").HourlyPoint} HourlyPoint */
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MAX_FORECAST_HOURS = 12;
 const MAX_DOT_ROWS = 9;
-const FOREST = "#23371b";
-const DOT_FILL = "#ebf3db";
+/** Colours come from CSS classes (see "SVG charts" in style.css) so charts follow the theme. */
+const CHART_FONT = { class: "chart-label", "font-size": 8.5, "font-family": "sans-serif" };
+/** Label every Nth hour on the dot-matrix x-axis (plus the final hour). */
+const AXIS_LABEL_EVERY = 3;
 
-/** Create an HTML element with optional class name and text content. */
-export function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
+/** Dot-matrix outlook geometry (SVG user units). */
+const DOT_CHART = {
+  width: 380,
+  height: 168,
+  padLeft: 30,
+  padRight: 10,
+  padTop: 14,
+  padBottom: 24,
+  minScaleAqi: 120,
+  maxDotRadius: 5.6,
+  dotRadiusRatio: 0.34,
+  dotGap: 2,
+};
 
-/** Create an SVG element with stringified attributes. */
+/** Exposure heatmap: relative-intensity bands from top (peak) to bottom (base). */
+const EXPOSURE_BANDS = [
+  { label: "PEAK", frac: 0.75, baseLvl: 4 },
+  { label: "HIGH", frac: 0.5, baseLvl: 3 },
+  { label: "MOD", frac: 0.25, baseLvl: 2 },
+  { label: "BASE", frac: 0, baseLvl: 1 },
+];
+const EXPOSURE = { minScaleAqi: 100, minSpan: 25, edgeFraction: 0.18, maxLevel: 4 };
+
+/** CO₂ comparison bar-chart geometry (SVG user units). */
+const IMPACT_CHART = {
+  viewBox: "0 0 360 134",
+  baseline: 118,
+  barWidth: 156,
+  transitX: 14,
+  carX: 190,
+  maxBarHeight: 92,
+  minCarHeight: 14,
+  minTransitHeight: 10,
+  minScaleKg: 0.5,
+  labelOffset: 6,
+};
+
+/**
+ * Create an SVG element with stringified attributes.
+ * @param {string} tag
+ * @param {Record<string, string | number>} [attrs]
+ * @returns {any}
+ */
 function svgEl(tag, attrs = {}) {
   const node = document.createElementNS(SVG_NS, tag);
   for (const [key, value] of Object.entries(attrs)) {
@@ -28,23 +71,11 @@ function svgEl(tag, attrs = {}) {
   return node;
 }
 
-/** Format an ISO timestamp in the city's local time (e.g. "5:30 am"). */
-export function formatTime(city, time) {
-  return new Intl.DateTimeFormat("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: city.zone,
-  }).format(new Date(time));
-}
-
-/** Format an ISO timestamp as a short hour label (e.g. "5 am"). */
-export function formatShortHour(city, time) {
-  return new Intl.DateTimeFormat("en-IN", {
-    hour: "numeric",
-    timeZone: city.zone,
-  }).format(new Date(time));
-}
-
+/**
+ * @param {DataMode} mode
+ * @param {boolean} separateOutlook
+ * @param {string | undefined} sourceKind
+ */
 function getForecastLabel(mode, separateOutlook, sourceKind) {
   if (mode === "demo") return "DEMO OUTLOOK";
   if (separateOutlook) return "SEPARATE CAMS MODEL";
@@ -52,8 +83,15 @@ function getForecastLabel(mode, separateOutlook, sourceKind) {
   return "REGIONAL MODEL";
 }
 
+/**
+ * @param {number | null} selectedHourIndex
+ * @param {number} bestIdx
+ * @param {number} count
+ * @returns {number}
+ */
 function resolveActiveHourIndex(selectedHourIndex, bestIdx, count) {
   if (
+    selectedHourIndex !== null &&
     Number.isInteger(selectedHourIndex) &&
     selectedHourIndex >= 0 &&
     selectedHourIndex < count
@@ -63,7 +101,17 @@ function resolveActiveHourIndex(selectedHourIndex, bestIdx, count) {
   return bestIdx >= 0 ? bestIdx : 0;
 }
 
-/** Render the interactive 12-hour stacked-circle dot-matrix chart and hour selector pills. */
+/**
+ * Render the interactive 12-hour stacked-circle dot-matrix chart and hour selector pills.
+ * @param {object} options
+ * @param {Air} options.air Air data that carries the hourly outlook.
+ * @param {Plan} options.plan Plan computed from that outlook.
+ * @param {DataMode} options.mode
+ * @param {City} options.city
+ * @param {boolean} [options.separateOutlook] Outlook comes from a different source than the reading.
+ * @param {number | null} options.selectedHourIndex
+ * @param {(index: number) => void} options.onSelectHour
+ */
 export function renderForecast({
   air,
   plan,
@@ -80,17 +128,17 @@ export function renderForecast({
   pills.replaceChildren();
   table.replaceChildren();
 
-  $("#forecast-label").textContent = getForecastLabel(
-    mode,
-    separateOutlook,
-    air.source?.kind,
-  );
+  $("#forecast-label").textContent = getForecastLabel(mode, separateOutlook, air.source?.kind);
 
   const hours = (air.hourly || []).slice(0, MAX_FORECAST_HOURS);
   if (!hours.length) {
     $("#inspector-reading").textContent = "Hourly forecast unavailable for this feed";
     chart.append(
-      el("p", "forecast-note", "Select Regional model or Demo scenario to view the 12-hour outlook."),
+      el(
+        "p",
+        "forecast-note",
+        "Select Regional model or Demo scenario to view the 12-hour outlook.",
+      ),
     );
     $("#best-window").textContent =
       air.source?.kind === "station"
@@ -103,8 +151,10 @@ export function renderForecast({
   const activeIdx = resolveActiveHourIndex(selectedHourIndex, bestIdx, hours.length);
 
   const activeHour = hours[activeIdx];
+  const activeLabel = activeIdx === 0 ? "Now" : formatTime(city, activeHour.time);
+  const lowestNote = activeIdx === bestIdx ? " · Lowest in window" : "";
   $("#inspector-reading").textContent =
-    `${activeIdx === 0 ? "Now" : formatTime(city, activeHour.time)} · AQI ${activeHour.aqi} (${category(activeHour.aqi).label})${activeIdx === bestIdx ? " · Lowest in window" : ""}`;
+    `${activeLabel} · AQI ${activeHour.aqi} (${category(activeHour.aqi).label})${lowestNote}`;
 
   chart.append(buildDotMatrixSvg(hours, activeIdx, city));
 
@@ -134,41 +184,59 @@ export function renderForecast({
     "aria-label",
     `${mode === "demo" ? "Illustrative" : "Modelled"} hourly US AQI: ${hours.map((h) => `${formatTime(city, h.time)}: ${h.aqi}`).join(", ")}. A data table follows.`,
   );
-  $("#best-window").textContent = plan.best
-    ? `${separateOutlook ? "Separate regional model (not a continuation of the station reading). " : ""}Lowest in outlook: ${formatTime(city, plan.best.time)} · AQI ${plan.best.aqi} (${category(plan.best.aqi).label.toLowerCase()}). Lower does not mean safe.`
-    : "";
+  $("#best-window").textContent = describeBestWindow(plan.best, city, separateOutlook);
 }
 
+/**
+ * @param {HourlyPoint | null} best
+ * @param {City} city
+ * @param {boolean} separateOutlook
+ * @returns {string}
+ */
+function describeBestWindow(best, city, separateOutlook) {
+  if (!best) return "";
+  const prefix = separateOutlook
+    ? "Separate regional model (not a continuation of the station reading). "
+    : "";
+  const label = category(best.aqi).label.toLowerCase();
+  return `${prefix}Lowest in outlook: ${formatTime(city, best.time)} · AQI ${best.aqi} (${label}). Lower does not mean safe.`;
+}
+
+/**
+ * @param {HourlyPoint[]} hours
+ * @param {number} activeIdx
+ * @param {City} city
+ */
 function buildDotMatrixSvg(hours, activeIdx, city) {
-  const maxAqi = Math.max(120, ...hours.map((h) => h.aqi));
-  const width = 380;
-  const height = 168;
-  const padL = 30;
-  const padR = 10;
-  const padT = 14;
-  const padB = 24;
+  const { width, height, padLeft: padL, padRight: padR, padTop: padT, padBottom: padB } = DOT_CHART;
+  const maxAqi = Math.max(DOT_CHART.minScaleAqi, ...hours.map((h) => h.aqi));
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
   const colW = plotW / hours.length;
-  const dotR = Math.min(5.6, colW * 0.34);
+  const dotR = Math.min(DOT_CHART.maxDotRadius, colW * DOT_CHART.dotRadiusRatio);
   const dotStep = plotH / MAX_DOT_ROWS;
 
   const svg = svgEl("svg", { viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true" });
   svg.append(
-    svgEl("line", { x1: padL, y1: padT, x2: padL, y2: height - padB, stroke: FOREST, "stroke-width": 1 }),
-    svgEl("line", { x1: padL, y1: height - padB, x2: width - padR, y2: height - padB, stroke: FOREST, "stroke-width": 1 }),
+    svgEl("line", {
+      x1: padL,
+      y1: padT,
+      x2: padL,
+      y2: height - padB,
+      class: "chart-axis",
+    }),
+    svgEl("line", {
+      x1: padL,
+      y1: height - padB,
+      x2: width - padR,
+      y2: height - padB,
+      class: "chart-axis",
+    }),
   );
 
   for (const frac of [0, 0.5, 1]) {
     const y = height - padB - frac * plotH;
-    const tick = svgEl("text", {
-      x: padL - 6,
-      y: y + 3,
-      "text-anchor": "end",
-      "font-size": 8.5,
-      fill: FOREST,
-      "font-family": "sans-serif",
-    });
+    const tick = svgEl("text", { x: padL - 6, y: y + 3, "text-anchor": "end", ...CHART_FONT });
     tick.textContent = String(Math.round(frac * maxAqi));
     svg.append(tick);
   }
@@ -177,30 +245,26 @@ function buildDotMatrixSvg(hours, activeIdx, city) {
     const h = hours[i];
     const cx = padL + colW * i + colW / 2;
     const dots = Math.max(1, Math.round((h.aqi / maxAqi) * MAX_DOT_ROWS));
-    const fill = i === activeIdx ? FOREST : DOT_FILL;
+    const dotClass = i === activeIdx ? "chart-dot is-active" : "chart-dot";
 
     for (let d = 0; d < dots; d++) {
-      const cy = height - padB - dotStep * d - dotR - 2;
+      const cy = height - padB - dotStep * d - dotR - DOT_CHART.dotGap;
       svg.append(
         svgEl("circle", {
           cx: cx.toFixed(1),
           cy: cy.toFixed(1),
           r: dotR.toFixed(1),
-          fill,
-          stroke: FOREST,
-          "stroke-width": 1,
+          class: dotClass,
         }),
       );
     }
 
-    if (i === 0 || i === 3 || i === 6 || i === 9 || i === hours.length - 1) {
+    if (i % AXIS_LABEL_EVERY === 0 || i === hours.length - 1) {
       const lbl = svgEl("text", {
         x: cx.toFixed(1),
         y: height - 8,
         "text-anchor": "middle",
-        "font-size": 8.5,
-        fill: FOREST,
-        "font-family": "sans-serif",
+        ...CHART_FONT,
       });
       lbl.textContent = i === 0 ? "NOW" : formatShortHour(city, h.time).toUpperCase();
       svg.append(lbl);
@@ -209,35 +273,39 @@ function buildDotMatrixSvg(hours, activeIdx, city) {
   return svg;
 }
 
-/** Render the 4-band relative olive intensity heatmap on the Analytics view. */
+/**
+ * Shade level (0 = empty, 1–4) of one heatmap cell for a relative intensity.
+ * @param {number} rel Hour's AQI position between the window minimum (0) and maximum (1).
+ * @param {{ frac: number, baseLvl: number }} band
+ * @returns {number}
+ */
+function exposureLevel(rel, band) {
+  if (rel >= band.frac) {
+    const nearEdge = rel < band.frac + EXPOSURE.edgeFraction ? 1 : 0;
+    return Math.min(EXPOSURE.maxLevel, Math.max(1, band.baseLvl - nearEdge));
+  }
+  return band.baseLvl === 1 ? 1 : 0;
+}
+
+/**
+ * Render the 4-band relative olive intensity heatmap on the Analytics view.
+ * @param {Air} air
+ * @param {City} city
+ */
 export function renderExposureMatrix(air, city) {
   const container = $("#exposure-matrix");
   container.replaceChildren();
   const hours = (air.hourly || []).slice(0, MAX_FORECAST_HOURS);
-  const maxAqi = Math.max(100, ...hours.map((h) => h.aqi));
+  const maxAqi = Math.max(EXPOSURE.minScaleAqi, ...hours.map((h) => h.aqi));
   const minAqi = hours.length ? Math.min(...hours.map((h) => h.aqi)) : 0;
-  const span = Math.max(25, maxAqi - minAqi);
-  const bands = [
-    { label: "PEAK", frac: 0.75, baseLvl: 4 },
-    { label: "HIGH", frac: 0.5, baseLvl: 3 },
-    { label: "MOD", frac: 0.25, baseLvl: 2 },
-    { label: "BASE", frac: 0, baseLvl: 1 },
-  ];
+  const span = Math.max(EXPOSURE.minSpan, maxAqi - minAqi);
 
-  for (const band of bands) {
+  for (const band of EXPOSURE_BANDS) {
     const row = el("div", "density-row");
     row.append(el("span", "density-label", band.label));
     for (let i = 0; i < MAX_FORECAST_HOURS; i++) {
       const h = hours[i];
-      let lvl = 0;
-      if (h && Number.isFinite(h.aqi)) {
-        const rel = (h.aqi - minAqi) / span;
-        if (rel >= band.frac) {
-          lvl = Math.min(4, Math.max(1, band.baseLvl - (rel < band.frac + 0.18 ? 1 : 0)));
-        } else if (band.baseLvl === 1) {
-          lvl = 1;
-        }
-      }
+      const lvl = h && Number.isFinite(h.aqi) ? exposureLevel((h.aqi - minAqi) / span, band) : 0;
       row.append(el("span", `density-cell${lvl ? ` lvl-${lvl}` : ""}`));
     }
     container.append(row);
@@ -256,26 +324,31 @@ export function renderExposureMatrix(air, city) {
   container.append(times);
 }
 
-/** Render the diagonal-hatched vs. solid forest commute CO2 comparison chart. */
+/**
+ * Render the diagonal-hatched vs. solid forest commute CO₂ comparison chart.
+ * @param {number | string} distance Daily distance in km.
+ */
 export function renderImpact(distance) {
   const value = Number(distance);
+  const { car, transit } = CO2_KG_PER_KM;
   const estimate = impact({ commute: "car", distance: value });
   $("#distance-label").textContent = `${value} km`;
   $("#carbon-saving").textContent = estimate.savedKg.toFixed(2);
   $("#carbon-formula").textContent =
-    `${value} km × (0.17 − 0.06) kg CO₂/km = ${estimate.savedKg.toFixed(2)} kg CO₂ per day. Scenario only; not logged as an actual saving.`;
+    `${value} km × (${car} − ${transit}) kg CO₂/km = ${estimate.savedKg.toFixed(2)} kg CO₂ per day. Scenario only; not logged as an actual saving.`;
 
   const chart = $("#impact-chart");
   if (!chart) return;
   chart.replaceChildren();
 
-  const carKg = Number((value * 0.17).toFixed(2));
-  const transitKg = Number((value * 0.06).toFixed(2));
-  const maxVal = Math.max(0.5, carKg);
-  const carH = Math.max(14, Math.round((carKg / maxVal) * 92));
-  const transitH = Math.max(10, Math.round((transitKg / maxVal) * 92));
+  const C = IMPACT_CHART;
+  const carKg = Number((value * car).toFixed(2));
+  const transitKg = Number((value * transit).toFixed(2));
+  const maxVal = Math.max(C.minScaleKg, carKg);
+  const carH = Math.max(C.minCarHeight, Math.round((carKg / maxVal) * C.maxBarHeight));
+  const transitH = Math.max(C.minTransitHeight, Math.round((transitKg / maxVal) * C.maxBarHeight));
 
-  const svg = svgEl("svg", { viewBox: "0 0 360 134", "aria-hidden": "true" });
+  const svg = svgEl("svg", { viewBox: C.viewBox, "aria-hidden": "true" });
   const defs = svgEl("defs");
   const pattern = svgEl("pattern", {
     id: "diag-hatch",
@@ -284,21 +357,41 @@ export function renderImpact(distance) {
     patternUnits: "userSpaceOnUse",
     patternTransform: "rotate(45)",
   });
-  pattern.append(svgEl("line", { x1: 0, y1: 0, x2: 0, y2: 8, stroke: FOREST, "stroke-width": 2.4 }));
+  pattern.append(svgEl("line", { x1: 0, y1: 0, x2: 0, y2: 8, class: "chart-hatch" }));
   defs.append(pattern);
   svg.append(defs);
 
-  const tY = 118 - transitH;
+  const barLabelFont = { "font-size": 9, "font-weight": 700, "font-family": "sans-serif" };
+  const tY = C.baseline - transitH;
   svg.append(
-    svgEl("rect", { x: 14, y: tY, width: 156, height: transitH, fill: "url(#diag-hatch)", stroke: FOREST, "stroke-width": 1 }),
+    svgEl("rect", {
+      x: C.transitX,
+      y: tY,
+      width: C.barWidth,
+      height: transitH,
+      fill: "url(#diag-hatch)",
+      class: "chart-axis",
+    }),
   );
-  const tLabel = svgEl("text", { x: 14, y: tY - 6, "font-size": 9, "font-weight": 700, fill: "#4a5444", "font-family": "sans-serif" });
+  const tLabel = svgEl("text", {
+    x: C.transitX,
+    y: tY - C.labelOffset,
+    class: "chart-label is-muted",
+    ...barLabelFont,
+  });
   tLabel.textContent = `PUBLIC TRANSIT (${transitKg.toFixed(2)} KG)`;
   svg.append(tLabel);
 
-  const cY = 118 - carH;
-  svg.append(svgEl("rect", { x: 190, y: cY, width: 156, height: carH, fill: FOREST }));
-  const cLabel = svgEl("text", { x: 190, y: cY - 6, "font-size": 9, "font-weight": 700, fill: FOREST, "font-family": "sans-serif" });
+  const cY = C.baseline - carH;
+  svg.append(
+    svgEl("rect", { x: C.carX, y: cY, width: C.barWidth, height: carH, class: "chart-bar" }),
+  );
+  const cLabel = svgEl("text", {
+    x: C.carX,
+    y: cY - C.labelOffset,
+    class: "chart-label",
+    ...barLabelFont,
+  });
   cLabel.textContent = `SOLO CAR (${carKg.toFixed(2)} KG)`;
   svg.append(cLabel);
 

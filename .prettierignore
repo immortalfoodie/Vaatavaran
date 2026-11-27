@@ -1,0 +1,6 @@
+node_modules/
+artifacts/
+coverage/
+package-lock.json
+docs/preview.png
+public/index.html

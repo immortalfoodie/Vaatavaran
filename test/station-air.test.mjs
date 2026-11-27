@@ -7,11 +7,16 @@ import { CITIES } from "../public/engine.js";
 const now = Date.parse("2026-11-17T18:00:00Z");
 const city = CITIES[0];
 function reading() {
-  return { status: "ok", data: { aqi: 234,
-    time: { iso: "2026-11-17T23:00:00+05:30" },
-    city: { name: "Test station", geo: [city.lat, city.lon], url: "https://aqicn.org/city/test" },
-    attributions: [{ name: "Monitoring agency", url: "https://example.org" }],
-    iaqi: { pm25: { v: 234 }, pm10: { v: 170 } } } };
+  return {
+    status: "ok",
+    data: {
+      aqi: 234,
+      time: { iso: "2026-11-17T23:00:00+05:30" },
+      city: { name: "Test station", geo: [city.lat, city.lon], url: "https://aqicn.org/city/test" },
+      attributions: [{ name: "Monitoring agency", url: "https://example.org" }],
+      iaqi: { pm25: { v: 234 }, pm10: { v: 170 } },
+    },
+  };
 }
 
 test("Station reading retains provenance and never mislabels pollutant subindices", () => {
@@ -36,11 +41,30 @@ test("Missing or invalid pollutant indices are not invented", () => {
 
 test("Station parser rejects stale, future, distant and invalid readings", () => {
   for (const mutate of [
-    d => { d.aqi = false; }, d => { d.aqi = " "; }, d => { d.aqi = "-"; },
-    d => { d.time.iso = "2026-11-16T18:00:00Z"; },
-    d => { d.time.iso = "2026-11-18T18:00:00Z"; },
-    d => { d.city.geo = [0, 0]; }, d => { d.city.geo = null; },
-    d => { d.attributions = []; },
+    (d) => {
+      d.aqi = false;
+    },
+    (d) => {
+      d.aqi = " ";
+    },
+    (d) => {
+      d.aqi = "-";
+    },
+    (d) => {
+      d.time.iso = "2026-11-16T18:00:00Z";
+    },
+    (d) => {
+      d.time.iso = "2026-11-18T18:00:00Z";
+    },
+    (d) => {
+      d.city.geo = [0, 0];
+    },
+    (d) => {
+      d.city.geo = null;
+    },
+    (d) => {
+      d.attributions = [];
+    },
   ]) {
     const payload = reading();
     mutate(payload.data);
@@ -56,12 +80,22 @@ test("Station attribution cannot introduce executable links", () => {
 
 test("Station requests stay fresh while explicit model mode stays separate", async () => {
   const hosts = [];
-  const service = createAirService(async url => {
-    hosts.push(url.hostname);
-    return { ok: true, json: async () => url.hostname === "api.waqi.info" ? reading() : {
-      hourly: { time: [now / 1000], us_aqi: [153], pm2_5: [84], pm10: [85] },
-    } };
-  }, () => now, "test-token");
+  const service = createAirService(
+    async (url) => {
+      hosts.push(url.hostname);
+      return {
+        ok: true,
+        json: async () =>
+          url.hostname === "api.waqi.info"
+            ? reading()
+            : {
+                hourly: { time: [now / 1000], us_aqi: [153], pm2_5: [84], pm10: [85] },
+              },
+      };
+    },
+    () => now,
+    "test-token",
+  );
   assert.equal((await service(city, "live")).aqi, 234);
   await service(city, "live");
   const model = await service(city, "model");
@@ -73,7 +107,14 @@ test("Station requests stay fresh while explicit model mode stays separate", asy
 
 test("Station failure does not silently substitute a model forecast", async () => {
   let calls = 0;
-  const service = createAirService(async () => { calls++; throw new Error("Offline"); }, () => now, "test-token");
+  const service = createAirService(
+    async () => {
+      calls++;
+      throw new Error("Offline");
+    },
+    () => now,
+    "test-token",
+  );
   await assert.rejects(service(city, "live"));
   assert.equal(calls, 1);
 });

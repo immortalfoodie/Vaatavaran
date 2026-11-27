@@ -3,7 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#23371b" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f8f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#10150d" media="(prefers-color-scheme: dark)" />
     <meta
       name="description"
       content="Vaatavaran turns air quality into a practical, personalized daily plan for your household."
@@ -13,7 +15,7 @@
     <link rel="stylesheet" href="/style.css" />
     <script type="module" src="/app.js"></script>
   </head>
-  <body>
+  <body data-loading="air outlook">
     <a class="skip" href="#main">Skip to main content</a>
 
     <header class="topbar">
@@ -113,8 +115,8 @@
 
         <div class="header-metrics">
           <div class="stat-pill" id="aqi-stat-pill">
-            <span class="stat-count" id="header-aqi-count">—</span>
-            <span class="stat-label" id="header-aqi-label">US AQI</span>
+            <span class="stat-count" id="header-aqi-count" data-skeleton="air">—</span>
+            <span class="stat-label" id="header-aqi-label" data-skeleton="air">US AQI</span>
           </div>
           <div class="mode-control">
             <label class="sr-only" for="data-mode">Air quality data mode</label>
@@ -168,7 +170,7 @@
             aria-labelledby="air-heading"
           >
             <div class="panel-head">
-              <h2 id="air-heading">AIR QUALITY INDEX</h2>
+              <h2 id="air-heading" data-skeleton="air">AIR QUALITY INDEX</h2>
               <span class="feed-status">
                 <span class="status-dot" aria-hidden="true"></span>
                 <span id="data-label">CHECKING DATA</span>
@@ -179,19 +181,29 @@
               <div class="kpi-meta">
                 <p class="kpi-location" id="air-location">Mumbai · Maharashtra, India</p>
                 <div class="kpi-badges">
-                  <span id="aqi-category" class="status-tag unknown"
+                  <span id="aqi-category" class="status-tag unknown" data-skeleton="air"
                     >CHECKING AIR</span
                   >
                   <span id="aqi-delta" class="delta-pill" hidden></span>
                 </div>
-                <p class="kpi-guidance" id="aqi-guidance">
+                <p class="kpi-guidance" id="aqi-guidance" data-skeleton="air">
                   Fetching the latest air quality data
+                </p>
+                <p class="kpi-updated">
+                  <time id="updated-ago" data-skeleton="air"></time>
                 </p>
               </div>
               <div class="kpi-reading">
-                <strong class="kpi-number" id="aqi">—</strong>
+                <strong class="kpi-number" id="aqi" data-skeleton="air">—</strong>
                 <span class="kpi-unit">US AQI</span>
               </div>
+            </div>
+
+            <div class="naqi-row" id="naqi" hidden>
+              <span class="row-key">INDIA NAQI (EST.)</span>
+              <strong class="naqi-value" id="naqi-value"></strong>
+              <span id="naqi-category" class="status-tag unknown"></span>
+              <span class="naqi-basis" id="naqi-basis"></span>
             </div>
 
             <div
@@ -208,11 +220,11 @@
             <div class="metrics-trio">
               <div class="metric-cell">
                 <span class="row-key">PM2.5</span>
-                <strong class="row-val" id="pm25">— <small>µg/m³</small></strong>
+                <strong class="row-val" id="pm25" data-skeleton="air">— <small>µg/m³</small></strong>
               </div>
               <div class="metric-cell">
                 <span class="row-key">PM10</span>
-                <strong class="row-val" id="pm10">— <small>µg/m³</small></strong>
+                <strong class="row-val" id="pm10" data-skeleton="air">— <small>µg/m³</small></strong>
               </div>
               <div class="metric-cell">
                 <span class="row-key">SOURCE TYPE</span>
@@ -224,7 +236,7 @@
 
             <div class="source-footer">
               <p class="who-note" id="who-context" hidden></p>
-              <p class="source-caption" id="observed-label">
+              <p class="source-caption" id="observed-label" data-skeleton="air">
                 Connecting to air quality provider
               </p>
               <p class="source-caption" id="data-description"></p>
@@ -232,12 +244,19 @@
               <details class="scale-explainer">
                 <summary>US AQI VS INDIA NAQI</summary>
                 <p>
-                  This app uses the <strong>US AQI</strong> scale (0–50 Good,
+                  Plans use the <strong>US AQI</strong> scale (0–50 Good,
                   51–100 Moderate, 101–150 Unhealthy for sensitive groups,
                   151–200 Unhealthy, 201–300 Very unhealthy, 301–500 Hazardous).
-                  India’s CPCB National AQI uses wider bands (e.g. 101–200 is
-                  labelled Moderate), so numbers and labels are not directly
-                  interchangeable.
+                  India’s CPCB <strong>National AQI</strong> uses different bands
+                  (0–50 Good, 51–100 Satisfactory, 101–200 Moderately polluted,
+                  201–300 Poor, 301–400 Very poor, 401–500 Severe), so the same air
+                  gets a different number and label on each scale.
+                </p>
+                <p>
+                  The India NAQI shown here is an <strong>estimate</strong> from the
+                  current PM2.5 and PM10 concentrations. Official CPCB values use
+                  24-hour averages of up to eight pollutants. It is hidden for station
+                  feeds, which report pollutant indices rather than concentrations.
                 </p>
               </details>
             </div>
@@ -252,10 +271,10 @@
             </div>
 
             <div class="brief-copy-block">
-              <h3 class="brief-headline" id="hero-title">
+              <h3 class="brief-headline" id="hero-title" data-skeleton="air">
                 A little planning. A cleaner-air day.
               </h3>
-              <p class="brief-summary" id="hero-summary">
+              <p class="brief-summary" id="hero-summary" data-skeleton="air">
                 Keep outdoor time short, create a cleaner indoor space, and make
                 essential trips count.
               </p>
@@ -264,15 +283,15 @@
             <div class="brief-trio">
               <div class="brief-stat">
                 <span>OUTDOOR</span>
-                <strong id="outdoor-summary">Checking air…</strong>
+                <strong id="outdoor-summary" data-skeleton="air">Checking air…</strong>
               </div>
               <div class="brief-stat">
                 <span>WINDOWS</span>
-                <strong id="window-summary">Check indoor sources</strong>
+                <strong id="window-summary" data-skeleton="air">Check indoor sources</strong>
               </div>
               <div class="brief-stat">
                 <span>BEST HOUR</span>
-                <strong id="best-slot">—</strong>
+                <strong id="best-slot" data-skeleton="outlook">—</strong>
               </div>
             </div>
 
@@ -308,7 +327,7 @@
               <a class="panel-link" href="#plan">[FULL PLAN ↗]</a>
             </div>
           </div>
-          <div class="priority-cards" id="priorities"></div>
+          <div class="priority-cards" id="priorities" data-skeleton="air"></div>
         </section>
 
         <!-- Band 3: Interactive 12-Hour Outlook + Activity Readiness (2 spacious columns) -->
@@ -324,23 +343,25 @@
 
             <div class="hour-inspector" id="hour-inspector">
               <span class="inspector-kicker">SELECTED HOUR</span>
-              <strong id="inspector-reading">Select an hour below to inspect</strong>
+              <strong id="inspector-reading" data-skeleton="outlook">Select an hour below to inspect</strong>
             </div>
 
             <div
               class="dot-chart"
               id="forecast"
+              data-skeleton="outlook"
               role="img"
               aria-label="Hourly AQI outlook"
             ></div>
             <div
               class="hour-pills"
               id="hour-pills"
+              data-skeleton="outlook"
               role="group"
               aria-label="Inspect specific hour"
             ></div>
 
-            <p id="best-window" class="forecast-note"></p>
+            <p id="best-window" class="forecast-note" data-skeleton="outlook"></p>
             <details class="hourly-details">
               <summary>READ FULL HOURLY TABLE</summary>
               <table>
@@ -368,7 +389,7 @@
               Quick everyday decisions tailored to your current air quality and
               household sensitivity.
             </p>
-            <div class="readiness-list" id="activity-readiness"></div>
+            <div class="readiness-list" id="activity-readiness" data-skeleton="air"></div>
             <p id="source-warning" class="source-warning"></p>
           </section>
         </div>

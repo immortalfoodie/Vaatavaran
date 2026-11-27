@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseGoogleAir, usAqiFromPm } from "../lib/google-air.mjs";
+import { fetchGoogleAir, parseGoogleAir } from "../lib/google-air.mjs";
+import { usAqiFromPm } from "../public/aqi-scales.js";
 import { createAirService } from "../lib/air-quality.mjs";
 import { CITIES } from "../public/engine.js";
 
@@ -65,4 +66,43 @@ test("Air service prioritizes Google Air Quality when key is configured and cach
   assert.equal(first.aqi, 177);
   assert.equal(second.aqi, 177);
   assert.equal(calls, 1);
+});
+
+test("Google API key travels in a header and never in the request URL", async () => {
+  let seen;
+  const fetcher = async (url, init) => {
+    seen = { url: String(url), init };
+    return { ok: true, json: async () => sampleGooglePayload() };
+  };
+  await fetchGoogleAir(fetcher, "secret-key", mumbai, now);
+  assert.doesNotMatch(seen.url, /secret-key|key=/);
+  assert.equal(seen.init.headers["x-goog-api-key"], "secret-key");
+  assert.ok(seen.init.signal, "request has a deadline");
+});
+
+test("Official usa_epa index is preferred and is never repeated as the local index", () => {
+  const payload = sampleGooglePayload();
+  payload.indexes = [
+    { code: "uaqi", aqi: 34 },
+    { code: "usa_epa", displayName: "AQI (US)", aqi: 163 },
+  ];
+  const air = parseGoogleAir(payload, mumbai, now);
+  assert.equal(air.aqi, 163);
+  assert.equal(air.localIndex, null);
+});
+
+test("Missing or negative Google concentrations are reported as null, not zero", () => {
+  const payload = sampleGooglePayload();
+  payload.pollutants = [{ code: "pm25", concentration: { value: -1 } }];
+  payload.indexes = [{ code: "usa_epa", aqi: 80 }];
+  const air = parseGoogleAir(payload, mumbai, now);
+  assert.equal(air.pm25, null);
+  assert.equal(air.pm10, null);
+  assert.equal(air.aqi, 80);
+});
+
+test("Google readings from the future beyond clock skew are rejected", () => {
+  const payload = sampleGooglePayload();
+  payload.dateTime = new Date(now + 60 * 60 * 1000).toISOString();
+  assert.throws(() => parseGoogleAir(payload, mumbai, now), /missing or stale/);
 });

@@ -23,13 +23,77 @@
   --status-unhealthy: #de857c;
   --status-very: #b97580;
   --status-hazardous: #8e4b5d;
+  /* Semantic tokens: components use these, so the dark theme only overrides values. */
+  --accent: #23371b; /* text, borders and chart ink on page surfaces */
+  --on-forest-accent: #d8e6bc; /* secondary text on brand panels; same in both themes */
+  --surface-raised: #ffffff;
+  --overlay: rgba(255, 255, 255, 0.55);
+  --line: rgba(35, 55, 27, 0.3);
+  --line-soft: rgba(35, 55, 27, 0.12);
+  --topbar-bg: rgba(247, 248, 243, 0.96);
+  --warn-bg: #f5ecd7;
+  --warn-ink: #5c4314;
+  --warn-border: #c8aa68;
+  --danger-bg: #f5dfdc;
+  --danger-ink: #6e2b24;
+  --done-border: #8fa372;
+  --seg-empty: #d2d6c7;
+  --chart-dot: #ebf3db;
+  --skeleton-base: #e4e7dc;
+  --skeleton-shine: #f3f5ee;
   --radius: 14px;
   --radius-sm: 8px;
   --font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  color-scheme: light dark;
   font: 15px/1.55 var(--font-sans);
   color: var(--ink);
   background: var(--bg);
   font-synthesis: none;
+}
+
+/* Dark theme follows the operating-system preference. Brand panels (--forest) stay dark;
+   accent text flips to a light green so it keeps contrast on dark surfaces. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10150d;
+    --surface: #161d12;
+    --surface-bright: #1c2517;
+    --surface-raised: #24301d;
+    --forest: #2b4222;
+    --forest-hover: #35502a;
+    --accent: #bcd99a;
+    --pistachio: #3d5a2c;
+    --pistachio-soft: #253420;
+    --pistachio-hover: #4a6a36;
+    --olive-1: #1c2517;
+    --olive-2: #34442a;
+    --olive-3: #5e7747;
+    --olive-4: #8fae6a;
+    --border-dash: #4b5642;
+    --border-solid: #353f2e;
+    --ink: #e6ecdf;
+    --ink-2: #c2cbb7;
+    --muted: #9ba68f;
+    --status-good: #8fb06a;
+    --status-sensitive: #e9a47e;
+    --status-unhealthy: #e8928a;
+    --status-very: #c98a95;
+    --status-hazardous: #b8687c;
+    --overlay: rgba(255, 255, 255, 0.04);
+    --line: rgba(214, 230, 190, 0.22);
+    --line-soft: rgba(214, 230, 190, 0.1);
+    --topbar-bg: rgba(16, 21, 13, 0.94);
+    --warn-bg: #3a301a;
+    --warn-ink: #f1d9a3;
+    --warn-border: #8a7038;
+    --danger-bg: #3e211e;
+    --danger-ink: #f3bdb5;
+    --done-border: #5d7346;
+    --seg-empty: #2e3828;
+    --chart-dot: #2a3a20;
+    --skeleton-base: #222b1c;
+    --skeleton-shine: #2f3a28;
+  }
 }
 
 *,
@@ -91,7 +155,7 @@ svg {
 }
 
 :focus-visible {
-  outline: 2px solid var(--forest);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -130,7 +194,7 @@ svg {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(247, 248, 243, 0.96);
+  background: var(--topbar-bg);
   backdrop-filter: blur(8px);
   border-bottom: 1px dashed var(--border-dash);
 }
@@ -152,7 +216,7 @@ svg {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: var(--forest);
+  color: var(--accent);
   white-space: nowrap;
 }
 
@@ -222,13 +286,15 @@ svg {
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--pistachio-soft);
-  color: var(--forest);
+  color: var(--accent);
   text-decoration: none;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.07em;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .nav-pill:hover {
@@ -322,7 +388,7 @@ main {
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--pistachio);
-  color: var(--forest);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.07em;
@@ -381,7 +447,7 @@ main {
   border: 1px dashed var(--border-dash);
   border-radius: var(--radius-sm);
   background: var(--surface-bright);
-  color: var(--forest);
+  color: var(--accent);
   font-size: 15px;
   font-weight: 700;
   line-height: 1;
@@ -399,9 +465,9 @@ main {
   flex-wrap: wrap;
   padding: 12px 16px;
   margin-bottom: 22px;
-  background: #f5ecd7;
-  color: #5c4314;
-  border: 1px dashed #c8aa68;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  border: 1px dashed var(--warn-border);
   border-radius: var(--radius-sm);
   font-size: 13px;
 }
@@ -438,7 +504,7 @@ main {
 
 .panel-green {
   background: var(--pistachio);
-  border: 1px dashed #8fa372;
+  border: 1px dashed var(--done-border);
 }
 
 .panel-head {
@@ -448,7 +514,7 @@ main {
   gap: 12px;
   padding-bottom: 12px;
   margin-bottom: 18px;
-  border-bottom: 1px solid var(--forest);
+  border-bottom: 1px solid var(--accent);
 }
 
 .panel-head-dark {
@@ -483,11 +549,11 @@ main {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--pistachio);
+  color: var(--on-forest-accent);
 }
 
 .panel-link:hover {
-  color: var(--forest);
+  color: var(--accent);
   text-decoration: underline;
 }
 
@@ -514,7 +580,7 @@ main {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .status-dot {
@@ -598,18 +664,18 @@ main {
   font-weight: 700;
   letter-spacing: 0.06em;
   background: var(--pistachio-soft);
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .delta-pill.worse {
-  background: #f5dfdc;
-  color: #6e2b24;
+  background: var(--danger-bg);
+  color: var(--danger-ink);
 }
 
 .who-note {
   font-size: 12px;
   font-weight: 600;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .scale-explainer {
@@ -623,7 +689,7 @@ main {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .scale-explainer p {
@@ -659,7 +725,7 @@ main {
 }
 
 .compare-card.current {
-  border-color: var(--forest);
+  border-color: var(--accent);
   background: var(--pistachio-soft);
 }
 
@@ -762,11 +828,11 @@ main {
 .seg-block {
   height: 12px;
   border-radius: 2px;
-  background: #d2d6c7;
+  background: var(--seg-empty);
 }
 
 .seg-block.filled {
-  background: var(--forest);
+  background: var(--accent);
 }
 
 .scale-labels {
@@ -873,7 +939,7 @@ main {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--pistachio);
+  color: var(--on-forest-accent);
 }
 
 .brief-stat strong {
@@ -938,12 +1004,14 @@ main {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .priority-card.done {
   background: var(--pistachio-soft);
-  border-color: #8fa372;
+  border-color: var(--done-border);
 }
 
 .priority-card-top {
@@ -960,7 +1028,7 @@ main {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .priority-card h3 {
@@ -992,7 +1060,7 @@ main {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
   text-decoration: none;
 }
 
@@ -1014,8 +1082,8 @@ main {
   gap: 12px;
   padding: 10px 14px;
   margin-bottom: 14px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px dashed rgba(35, 55, 27, 0.3);
+  background: var(--overlay);
+  border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
   flex-wrap: wrap;
 }
@@ -1024,10 +1092,10 @@ main {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--forest);
+  color: var(--accent);
 }
 
-#inspector-reading {
+.hour-inspector > strong {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
@@ -1052,9 +1120,9 @@ main {
 }
 
 .hour-pill {
-  border: 1px solid rgba(35, 55, 27, 0.25);
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--forest);
+  border: 1px solid var(--line);
+  background: var(--overlay);
+  color: var(--accent);
   border-radius: 5px;
   padding: 5px 8px;
   font-size: 10px;
@@ -1064,7 +1132,7 @@ main {
 }
 
 .hour-pill:hover {
-  background: #ffffff;
+  background: var(--surface-raised);
 }
 
 .hour-pill.selected {
@@ -1076,12 +1144,12 @@ main {
 .forecast-note {
   font-size: 13px;
   line-height: 1.5;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .hourly-details {
   margin-top: 12px;
-  border-top: 1px dashed rgba(35, 55, 27, 0.3);
+  border-top: 1px dashed var(--line);
   padding-top: 10px;
 }
 
@@ -1090,7 +1158,7 @@ main {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .hourly-details table {
@@ -1098,7 +1166,7 @@ main {
   border-collapse: collapse;
   margin-top: 10px;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.65);
+  background: var(--overlay);
   border-radius: var(--radius-sm);
 }
 
@@ -1113,13 +1181,13 @@ main {
 .hourly-details td {
   text-align: left;
   padding: 6px 8px;
-  border-bottom: 1px solid rgba(35, 55, 27, 0.15);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .hourly-details th {
   font-size: 10px;
   letter-spacing: 0.07em;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 /* Activity Readiness List */
@@ -1194,7 +1262,7 @@ main {
 
 .btn-light {
   background: var(--pistachio);
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .btn-light:hover {
@@ -1219,7 +1287,7 @@ main {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .bracket-btn:hover {
@@ -1310,7 +1378,7 @@ main {
 
 .plan-card.done {
   background: var(--pistachio-soft);
-  border-color: #8fa372;
+  border-color: var(--done-border);
 }
 
 .plan-card-eyebrow {
@@ -1348,13 +1416,13 @@ main {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .plan-impact {
   font-size: 12px;
   font-weight: 600;
-  color: var(--forest);
+  color: var(--accent);
   padding-top: 6px;
 }
 
@@ -1371,7 +1439,7 @@ main {
 .check-row input[type="checkbox"] {
   width: 17px;
   height: 17px;
-  accent-color: var(--forest);
+  accent-color: var(--accent);
 }
 
 .callout {
@@ -1460,7 +1528,7 @@ main {
   width: 10px;
   height: 10px;
   border-radius: 2px;
-  border: 1px solid rgba(35, 55, 27, 0.15);
+  border: 1px solid var(--line-soft);
 }
 
 .sw-0 {
@@ -1499,7 +1567,7 @@ main {
   height: 26px;
   border-radius: 4px;
   background: var(--olive-1);
-  border: 1px solid rgba(35, 55, 27, 0.08);
+  border: 1px solid var(--line-soft);
 }
 
 .density-cell.lvl-1 {
@@ -1512,7 +1580,7 @@ main {
   background: var(--olive-4);
 }
 .density-cell.lvl-4 {
-  background: var(--forest);
+  background: var(--accent);
 }
 
 .density-times {
@@ -1539,7 +1607,7 @@ main {
 }
 
 .signal-track {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--overlay);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
@@ -1660,7 +1728,7 @@ main {
 
 .impact-dist input[type="range"] {
   width: 100%;
-  accent-color: var(--forest);
+  accent-color: var(--accent);
 }
 
 .amplification-chart {
@@ -1726,7 +1794,7 @@ main {
 }
 
 .footer-row strong {
-  color: var(--forest);
+  color: var(--accent);
   letter-spacing: 0.08em;
 }
 
@@ -1869,7 +1937,7 @@ dialog::backdrop {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
   margin: 16px 0 6px;
 }
 
@@ -1890,7 +1958,7 @@ dialog::backdrop {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
   background: var(--surface-bright);
   border: 1px dashed var(--border-dash);
   border-radius: var(--radius-sm);
@@ -1944,8 +2012,8 @@ dialog::backdrop {
 }
 
 .message.error {
-  background: #f5dfdc;
-  color: #6a2822;
+  background: var(--danger-bg);
+  color: var(--danger-ink);
 }
 
 .message-label {
@@ -1954,7 +2022,7 @@ dialog::backdrop {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--forest);
+  color: var(--accent);
   margin-bottom: 4px;
 }
 
@@ -1973,7 +2041,7 @@ dialog::backdrop {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: var(--forest);
+  color: var(--accent);
 }
 
 .suggestions button:hover {
@@ -2086,7 +2154,131 @@ dialog::backdrop {
   }
 }
 
+/* India NAQI estimate under the US AQI hero */
+.naqi-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 4px 0 16px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-dash);
+  border-radius: var(--radius-sm);
+  background: var(--surface-bright);
+}
+
+.naqi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.naqi-basis {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.kpi-updated {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* SVG charts: colours live here (not in SVG attributes) so they follow the theme. */
+.chart-axis {
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.chart-label {
+  fill: var(--accent);
+}
+
+.chart-label.is-muted {
+  fill: var(--ink-2);
+}
+
+.chart-dot {
+  fill: var(--chart-dot);
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.chart-dot.is-active,
+.chart-bar {
+  fill: var(--accent);
+}
+
+.chart-hatch {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+
+/* Skeleton placeholders.
+   Elements opt in with data-skeleton="air" or "outlook"; <body data-loading> lists the
+   regions still loading (see setLoadingRegion in dom.js). Content is hidden rather than
+   removed so the layout does not jump when data arrives; aria-busy on the view tells
+   assistive technology to wait. */
+:is(
+  body[data-loading~="air"] [data-skeleton="air"],
+  body[data-loading~="outlook"] [data-skeleton="outlook"]
+) {
+  min-inline-size: 5ch;
+  min-block-size: 1.1em;
+  color: transparent;
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+      90deg,
+      var(--skeleton-base) 0%,
+      var(--skeleton-shine) 50%,
+      var(--skeleton-base) 100%
+    )
+    0 0 / 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+:is(
+  body[data-loading~="air"] :is(span, strong, time)[data-skeleton="air"],
+  body[data-loading~="outlook"] :is(span, strong, time)[data-skeleton="outlook"]
+) {
+  display: inline-block;
+}
+
+:is(
+    body[data-loading~="air"] [data-skeleton="air"],
+    body[data-loading~="outlook"] [data-skeleton="outlook"]
+  )
+  > *,
+:is(
+  body[data-loading~="air"] [data-skeleton="air"],
+  body[data-loading~="outlook"] [data-skeleton="outlook"]
+)::before {
+  visibility: hidden;
+}
+
+body[data-loading~="outlook"] .hour-pills[data-skeleton] {
+  min-block-size: 34px;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  [data-skeleton] {
+    animation: none !important;
+  }
+
   *,
   *::before,
   *::after {

@@ -23,26 +23,44 @@ Open **http://localhost:3000** (defaults to **Mumbai**, with 10 preset Indian ci
 - With no air-quality keys at all, it runs live on **Open-Meteo / Copernicus CAMS** (with 24-hour trend and 12-hour outlook) or offline **Demo scenario** mode.
 
 ```sh
-npm run verify   # syntax, 52 automated tests, and source-size budget
 npm run dev      # restart the server when source files change
 ```
+
+### Quality checks (contributors)
+
+The app itself has **zero runtime dependencies**. Quality tooling is dev-only:
+
+```sh
+npm install          # ESLint, Prettier and TypeScript (type checking only; no build step)
+npm run verify       # lint + format + strict type check + 92 tests with coverage + size budget
+```
+
+| Script                  | What it enforces                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `npm run lint`          | ESLint recommended rules, complexity ≤ 14, max 4 params, JSDoc on exports, 0 warnings |
+| `npm run format:check`  | Prettier formatting (100-column, LF line endings)                                     |
+| `npm run typecheck`     | `tsc --checkJs` in **strict** mode against JSDoc types in `public/types.js`           |
+| `npm run test:coverage` | `node:test` with coverage gates (≥ 90% lines/functions, ≥ 80% branches)               |
+
+CI runs the same steps on Node 22 and 24 for every push and pull request.
 
 ## Chosen vertical and persona
 
 **Urban Air Quality Assistant.** The primary persona is an urban Indian household balancing school, work, exercise, indoor air and a limited budget during winter smog. A secondary persona is a neighbour or community organizer sharing practical, low-emission habits.
 
-The goal is to turn “AQI is high” into **what to change, why it matters, and what trade-offs remain**. The app supports New Delhi, Mumbai, Bengaluru, Kolkata, Lucknow and Chennai, with city-local time throughout.
+The goal is to turn “AQI is high” into **what to change, why it matters, and what trade-offs remain**. The app ships 10 preset Indian cities (New Delhi, Mumbai, Bengaluru, Kolkata, Lucknow, Chennai, Hyderabad, Pune, Ahmedabad and Jaipur) plus worldwide city search, with city-local time throughout.
 
 ## What works
 
-- **Today’s overview:** US AQI, categories, PM2.5/PM10 concentrations, source/time labels and a 12-hour outlook with an accessible data table.
+- **Today’s overview:** US AQI, categories, PM2.5/PM10 concentrations, source/time labels, an "Updated X minutes ago" freshness line and a 12-hour outlook with an accessible data table.
+- **India NAQI beside US AQI:** an estimate on CPCB’s six-band National AQI (Good → Severe) from the current PM2.5/PM10 concentrations. It is labelled as an estimate (official CPCB values use 24-hour averages of up to eight pollutants) and hidden for station feeds, which report pollutant indices rather than concentrations.
 - **Personalized daily plan:** movement, commute and home actions respond to household sensitivity, travel mode, total daily distance, purifier access, budget and preferred exercise time.
 - **Explainable decisions:** every plan action includes its rationale and its practical exposure or emissions impact. A lower forecast value is never presented as automatically safe.
 - **A healthier home:** practical source control, ventilation and filtration guidance, with no-cost options first when appropriate.
 - **Impact calculator:** inspect the assumptions behind an illustrative car-to-transit carbon comparison. Estimates are never represented as measured savings or health improvements.
 - **Contextual assistant:** optional real generative AI, with a clearly labeled deterministic local guide when disabled or unavailable. Emergency symptom patterns bypass AI.
 - **Daily checklist:** browser-local progress; resets when household context changes. Plain-text household and community exports omit explicit health preferences.
-- **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support and responsive layouts.
+- **Accessible interface:** semantic landmarks, native controls, keyboard navigation, visible focus, modal dialogs with Escape dismissal, status announcements, text labels in addition to color, reduced-motion support, responsive layouts, a dark theme that follows the operating-system preference, and skeleton placeholders (with `aria-busy`) instead of misleading "unavailable" text while data loads.
 
 ## Enable Gemini on the free tier
 
@@ -96,7 +114,7 @@ Categories use **US AQI**: 0–50, 51–100, 101–150, 151–200, 201–300, 30
 4. The carbon scenario assumes **0.17 kg CO₂/km for solo car** and **0.06 kg CO₂/passenger-km for transit**. These are explicit illustrative constants, not locally validated emission factors. Distance is total daily travel, not one-way distance. Actual occupancy, power source, traffic and vehicles change results.
 5. Lower emissions and lower personal exposure are different objectives. A transit switch is not always feasible or cleaner for the passenger. Severe air-quality guidance takes priority.
 6. The household plan may reveal preferences indirectly through adapted actions even though exports exclude explicit sensitivity fields. Review an export before sharing it.
-7. The MVP has six supported cities, English content, no user accounts and no long-term history. It does not send notifications or invent community activity. Each assistant question is independent and uses the current household context.
+7. The MVP has 10 preset cities plus search (demo scenarios exist only for presets), English content, no user accounts and no long-term history. It does not send notifications or invent community activity. Each assistant question is independent and uses the current household context.
 8. This is educational support, not emergency or clinical care. Severe breathing difficulty or chest pain requires urgent local medical help.
 
 ## Architecture
@@ -104,22 +122,36 @@ Categories use **US AQI**: 0–50, 51–100, 101–150, 151–200, 201–300, 30
 Zero runtime dependencies; a small Node HTTP server and native browser modules keep the code auditable and the repository tiny.
 
 ```text
-public/index.html       Semantic dashboard, views, settings and chat dialogs
-public/style.css        Clinical biotech responsive visual system (with reduced-motion support)
-public/app.js           Interaction controller: navigation, city search, alerts and chat
-public/views.js         Stateless dashboard card and panel renderers
-public/charts.js        CSP-safe SVG dot-matrix, heatmap and CO2 chart renderers
-public/storage.js       Browser-local persistence and privacy-safe plan export helpers
-public/engine.js        Shared pure AQI, planning, activity readiness, impact and local-guide logic
-server.mjs              Modular HTTP server & Vercel handler, static cache, validation and limits
-vercel.json             Vercel security headers configuration
-lib/google-air.mjs      Google Air Quality API (500m) client and US EPA AQI conversion
-lib/station-air.mjs     WAQI ground-station parser and provenance checks
-lib/air-quality.mjs     Open-Meteo/CAMS parsing, 24h delta, geocoding and 10-min cache
-lib/assistant.mjs       Server-only Gemini adapter and grounding instructions
-test/*.test.mjs         54 automated unit, API, security and provider tests
-scripts/check-size.mjs  Source budget check (<10 MB)
-.github/workflows/ci.yml Automated checks on push
+public/index.html        Semantic dashboard, views, settings and chat dialogs
+public/style.css         Responsive visual system (with reduced-motion support)
+public/app.js            Controller: wires state, routing, air loading and UI events
+public/state.js          Validated app state restored from / persisted to localStorage
+public/api.js            Browser API client (deadlines, server error messages)
+public/chat.js           Assistant dialog: emergency bypass, AI/local answers, fallbacks
+public/city-search.js    Worldwide city search and multi-city comparison
+public/views.js          Stateless dashboard card and panel renderers
+public/charts.js         CSP-safe SVG dot-matrix, heatmap and CO₂ chart renderers
+public/storage.js        localStorage helpers and privacy-safe plan export
+public/dom.js            `$` / `el` helpers (textContent only, never innerHTML)
+public/engine.js         Shared pure AQI, planning, readiness, impact and local-guide logic
+public/aqi-scales.js     US EPA and India CPCB NAQI breakpoints and sub-index interpolation
+public/format.js         Locale-aware clock times and "4 minutes ago" relative ages
+public/time.js           Shared time-unit constants (browser + server)
+public/types.js          JSDoc type definitions (type checking only; never served)
+server.mjs               HTTP server & Vercel handler: routing, security headers, handlers
+lib/request.mjs          Body limits, custom-city validation, client IP resolution
+lib/rate-limit.mjs       Bounded per-client fixed-window limiter (API + AI sub-limit)
+lib/http.mjs             Upstream fetch with deadline + TTL cache with in-flight sharing
+lib/air-quality.mjs      Source selection, Open-Meteo/CAMS parsing, 24h delta, geocoding
+lib/google-air.mjs       Google Air Quality API (500 m) client and US EPA AQI conversion
+lib/station-air.mjs      WAQI ground-station parser and provenance checks
+lib/assistant.mjs        Server-only Gemini adapter and grounding instructions
+test/*.test.mjs          Unit, API, security, privacy and provider tests (node:test)
+vercel.json              Vercel security headers (mirrors server.mjs)
+eslint.config.js         Lint rules and maintainability budgets
+jsconfig.json            Strict JSDoc type checking configuration
+scripts/check-size.mjs   Source budget check (<10 MB)
+.github/workflows/ci.yml Lint, format, type check, coverage and size on Node 22 and 24
 ```
 
 ## Security and privacy
@@ -128,7 +160,8 @@ scripts/check-size.mjs  Source budget check (<10 MB)
 - Strict same-origin CSP, no third-party scripts/fonts, no `innerHTML` for user/provider content, framing disabled, MIME sniffing disabled.
 - JSON request limit of 8 KiB, question limit of 1,000 characters, supported-city allowlist and normalized household values.
 - Fixed upstream URLs prevent caller-selected proxy destinations. Network deadlines, in-flight coalescing and per-city caching bound work.
-- In-memory per-IP limits: 60 API requests/minute, with at most 8 AI requests/minute. Forwarded IP headers are deliberately not trusted.
+- In-memory per-IP limits: 60 API requests/minute, with at most 8 AI requests/minute; the client table is bounded. `X-Forwarded-For` is trusted only on Vercel or when `TRUST_PROXY=1` is set explicitly.
+- Server API keys are sent to Google in request headers, never in URLs, so they cannot leak into proxy or access logs.
 - Same-origin checks for chat POSTs; no permissive CORS. Gemini requires explicit per-page user opt-in; free-tier provider data-use terms are explained in the UI.
 - No analytics, tracking cookies, database, question logging or client-visible secrets. Preferences and completion are stored only in localStorage; chat stays in memory. **Reset saved data** clears these local settings and the current chat.
 
@@ -136,7 +169,7 @@ For Internet hosting, run behind HTTPS, set `HOST=0.0.0.0` and `APP_ORIGIN=https
 
 ## Validation
 
-`npm run verify` runs 52 deterministic tests without external network or paid AI calls. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling and provider fallbacks.
+`npm run verify` runs 92 deterministic tests without external network or paid AI calls, and fails if coverage drops below the configured thresholds. Tests use real ephemeral localhost HTTP servers and mock only external providers. Coverage includes all AQI boundaries, invalid values, sensitive households, activity readiness, severe-smog travel, budget-aware indoor advice, carbon arithmetic, 24h deltas, geocoding, Google Air Quality 500m parsing/caching, stale data, caching, origin checks, malformed/oversized requests, secret-file denial, consent, trusted context, emergency handling, provider fallbacks, rate-limit windows, request-body limits, custom-coordinate bounds, export privacy, API keys kept out of URLs, India NAQI bands (including CPCB’s published interpolation examples), relative-time formatting, and a check that every browser module is allowlisted by the server.
 
 Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persisted checklist state, city switching, assistant responses, literal rendering of HTML-like input, export downloads, impact calculations, simulated live outage and keyboard dialog dismissal. See [validation notes](docs/VALIDATION.md) for final results and limitations.
 
@@ -144,7 +177,7 @@ Browser QA covers desktop (1440 px), mobile (390 px), settings updates, persiste
 
 Try this two-minute walkthrough:
 
-1. Inspect the live Delhi reading, then switch to Explore demo: identify the **demo label**, very-unhealthy category and three actionable priorities.
+1. The app opens on Mumbai. Select **New Delhi** and inspect the live reading, then switch to Explore demo: identify the **demo label**, very-unhealthy category and three actionable priorities.
 2. Open household settings; select work-from-home, a purifier and a no-cost budget. Watch the recommendations change and inspect **Why this fits your day**.
 3. Switch to Chennai to see a good-air scenario; switch back to Delhi and notice the conservative activity advice.
 4. Ask “Can my child play outside?” and “Should I open the windows?” Check that the response source is labeled.
@@ -156,6 +189,7 @@ Try this two-minute walkthrough:
 
 - Air-quality data: [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api), using [Copernicus Atmosphere Monitoring Service (CAMS)](https://atmosphere.copernicus.eu/). Follow their attribution and licensing terms for deployment; the public endpoint’s free-use terms may not fit commercial traffic.
 - AQI categories: [AirNow AQI Basics](https://www.airnow.gov/aqi/aqi-basics/).
+- India National AQI bands: CPCB National Air Quality Index (2014), summarised by [IES Arthapedia](https://ies.gov.in/arthapedia/concept/national-air-quality-index). The open-ended Severe bands use the 380 µg/m³ (PM2.5) and 510 µg/m³ (PM10) upper bounds from CPCB’s AQI calculator so they can be interpolated; values are capped at 500.
 - Particle filtration and source control: [US EPA Indoor Air Filtration](https://www.epa.gov/wildfires/indoor-air-filtration) and [AirNow Be Smoke Ready](https://www.airnow.gov/wildfires/be-smoke-ready/). Particle-reduction guidance does not address every urban gas pollutant.
 - AI integration: [Gemini generateContent API](https://ai.google.dev/api/generate-content), [model availability](https://ai.google.dev/gemini-api/docs/models), and [free-tier pricing and data use](https://ai.google.dev/gemini-api/docs/pricing).
 
@@ -169,5 +203,5 @@ Try this two-minute walkthrough:
 MIT licensed. Original vector illustration and interface; no downloaded image assets.
 
 ### Station data
-The optional [WAQI API](https://aqicn.org/api/) requires a server-side token. Display attribution to WAQI and the originating monitoring agencies is retained beside the reading. Data is provisional. Follow the provider's use terms, including restrictions on redistribution, archival, commercial use and requirements for public organizational deployment; a free token is not an unrestricted data licence. The application does not store station readings or include their numeric values in plan exports.
 
+The optional [WAQI API](https://aqicn.org/api/) requires a server-side token. Display attribution to WAQI and the originating monitoring agencies is retained beside the reading. Data is provisional. Follow the provider's use terms, including restrictions on redistribution, archival, commercial use and requirements for public organizational deployment; a free token is not an unrestricted data licence. The application does not store station readings or include their numeric values in plan exports.

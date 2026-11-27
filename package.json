@@ -11,7 +11,21 @@
     "start": "node --env-file-if-exists=.env server.mjs",
     "dev": "node --watch --env-file-if-exists=.env server.mjs",
     "test": "node --test",
-    "check": "node --check server.mjs && node --check lib/google-air.mjs && node --check lib/station-air.mjs && node --check lib/air-quality.mjs && node --check lib/assistant.mjs && node --check public/app.js && node --check public/charts.js && node --check public/storage.js && node --check public/views.js && node --check public/engine.js",
-    "verify": "npm run check && npm test && node scripts/check-size.mjs"
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=90 --test-coverage-include=lib/** --test-coverage-include=public/engine.js --test-coverage-include=public/time.js --test-coverage-include=public/aqi-scales.js --test-coverage-include=public/format.js --test-coverage-include=server.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p jsconfig.json",
+    "check": "npm run lint && npm run format:check && npm run typecheck",
+    "verify": "npm run check && npm run test:coverage && node scripts/check-size.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.11",
+    "eslint": "^10.15.0",
+    "eslint-plugin-jsdoc": "^63.3.3",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript": "^7.0.2"
   }
 }

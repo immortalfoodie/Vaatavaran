@@ -3,11 +3,25 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["22", "24"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - run: npm run verify
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - name: Lint (ESLint, zero warnings)
+        run: npm run lint
+      - name: Formatting (Prettier)
+        run: npm run format:check
+      - name: Type check (tsc --checkJs, strict)
+        run: npm run typecheck
+      - name: Tests with coverage thresholds
+        run: npm run test:coverage
+      - name: Source size budget
+        run: node scripts/check-size.mjs

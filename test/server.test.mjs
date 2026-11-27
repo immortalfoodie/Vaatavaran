@@ -28,7 +28,7 @@ async function fixture(t, options = {}) {
   return {
     get: (path) => fetch(base + path),
     post: (body, headers = {}) =>
-      fetch(base + "/api/chat", {
+      fetch(`${base}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: typeof body === "string" ? body : JSON.stringify(body),
@@ -43,20 +43,12 @@ const question = {
 };
 test("Static allowlist protects private files and adds security headers", async (t) => {
   const app = await fixture(t);
-  for (const path of [
-    "/.env",
-    "/server.mjs",
-    "/package.json",
-    "/.git/config",
-    "/..%2f.env",
-  ])
+  for (const path of ["/.env", "/server.mjs", "/package.json", "/.git/config", "/..%2f.env"]) {
     assert.equal((await app.get(path)).status, 404);
+  }
   const page = await app.get("/");
   assert.equal(page.status, 200);
-  assert.match(
-    page.headers.get("content-security-policy"),
-    /frame-ancestors 'none'/,
-  );
+  assert.match(page.headers.get("content-security-policy"), /frame-ancestors 'none'/);
   assert.equal(page.headers.get("x-content-type-options"), "nosniff");
 });
 test("Unknown city and mode are rejected", async (t) => {
@@ -113,22 +105,10 @@ test("Malformed, oversized and hostile chat requests fail safely", async (t) => 
   assert.equal((await app.post("{invalid")).status, 400);
   assert.equal((await app.post("null")).status, 400);
   assert.equal((await app.post({ ...question, question: "" })).status, 400);
-  assert.equal(
-    (await app.post({ ...question, question: "a".repeat(1001) })).status,
-    400,
-  );
-  assert.equal(
-    (await app.post({ ...question, junk: "a".repeat(9000) })).status,
-    413,
-  );
-  assert.equal(
-    (await app.post(question, { Origin: "https://attacker.example" })).status,
-    403,
-  );
-  assert.equal(
-    (await app.post(question, { "Content-Type": "text/plain" })).status,
-    415,
-  );
+  assert.equal((await app.post({ ...question, question: "a".repeat(1001) })).status, 400);
+  assert.equal((await app.post({ ...question, junk: "a".repeat(9000) })).status, 413);
+  assert.equal((await app.post(question, { Origin: "https://attacker.example" })).status, 403);
+  assert.equal((await app.post(question, { "Content-Type": "text/plain" })).status, 415);
 });
 test("Without consent, configured AI still uses local guide", async (t) => {
   const app = await fixture(t, {
@@ -154,9 +134,7 @@ test("GenAI receives server-trusted context and never exposes credentials", asyn
             {
               finishReason: "STOP",
               content: {
-                parts: [
-                  { text: "Keep activity indoors in this demo scenario." },
-                ],
+                parts: [{ text: "Keep activity indoors in this demo scenario." }],
               },
             },
           ],
@@ -164,19 +142,14 @@ test("GenAI receives server-trusted context and never exposes credentials", asyn
       };
     },
   });
-  const data = await (
-    await app.post({ ...question, useAI: true, air: { aqi: 0 } })
-  ).json();
+  const data = await (await app.post({ ...question, useAI: true, air: { aqi: 0 } })).json();
   assert.equal(data.source, "ai");
   assert.equal(JSON.parse(payload.contents[0].parts[0].text).air.aqi, 286);
   assert.match(payload.systemInstruction.parts[0].text, /Never invent/);
   assert.ok(!JSON.stringify(data).includes("fake-secret"));
 });
 test("Provider failure and empty AI output return labeled local fallback", async (t) => {
-  for (const result of [
-    { ok: false },
-    { ok: true, json: async () => ({ output: [] }) },
-  ]) {
+  for (const result of [{ ok: false }, { ok: true, json: async () => ({ output: [] }) }]) {
     const app = await fixture(t, {
       apiKey: "fake",
       fetcher: async () => result,
@@ -201,8 +174,9 @@ test("Emergency escalation bypasses generative AI", async (t) => {
 });
 test("Per-client request limits prevent unlimited requests", async (t) => {
   const app = await fixture(t);
-  for (let i = 0; i < 60; i++)
+  for (let i = 0; i < 60; i++) {
     assert.equal((await app.get("/api/air?city=delhi&mode=demo")).status, 200);
+  }
   assert.equal((await app.get("/api/air?city=delhi&mode=demo")).status, 429);
 });
 

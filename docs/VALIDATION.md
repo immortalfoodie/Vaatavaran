@@ -38,14 +38,14 @@ Passed in a visible Chromium browser:
 
 axe-core via `@axe-core/playwright`, rules tagged WCAG 2 A/AA and WCAG 2.1 AA:
 
-| Surface | Final automated violations |
-| --- | ---: |
-| Today’s overview | 0 |
-| My daily plan | 0 |
-| A healthier home | 0 |
-| My impact | 0 |
-| Household dialog | 0 |
-| Assistant dialog | 0 |
+| Surface          | Final automated violations |
+| ---------------- | -------------------------: |
+| Today’s overview |                          0 |
+| My daily plan    |                          0 |
+| A healthier home |                          0 |
+| My impact        |                          0 |
+| Household dialog |                          0 |
+| Assistant dialog |                          0 |
 
 The first audit identified insufficient contrast in secondary labels and step numbers. Those colors were corrected and all listed surfaces re-audited. Keyboard dismissal and mobile overflow were separately checked. Automated testing is not a full accessibility certification; screen-reader testing with multiple assistive technologies remains future work.
 

@@ -11,6 +11,8 @@ import {
   activityReadiness,
   CITIES,
   DEFAULT_PROFILE,
+  CO2_KG_PER_KM,
+  isFiniteNumber,
 } from "../public/engine.js";
 
 for (const [aqi, label] of [
@@ -27,12 +29,12 @@ for (const [aqi, label] of [
   [301, "Hazardous"],
   [500, "Hazardous"],
 ]) {
-  test(`US AQI boundary ${aqi} is ${label}`, () =>
-    assert.equal(category(aqi).label, label));
+  test(`US AQI boundary ${aqi} is ${label}`, () => assert.equal(category(aqi).label, label));
 }
 test("Invalid and missing values are never reported as good air", () => {
-  for (const value of [null, undefined, NaN, Infinity, -1, 501, "50"])
+  for (const value of [null, undefined, NaN, Infinity, -1, 501, "50"]) {
     assert.equal(category(value).level, -1);
+  }
 });
 test("Sensitive household gets stricter advice at AQI 101", () => {
   const air = { aqi: 101, hourly: [] };
@@ -53,18 +55,9 @@ test("No-data state prompts monitoring instead of exercise advice", () => {
 });
 test("Home recommendations respect budget and existing equipment", () => {
   const air = demoAir("delhi");
-  assert.match(
-    makePlan(air, { purifier: false, budget: "low" }).cards[2].action,
-    /Damp-dust/,
-  );
-  assert.match(
-    makePlan(air, { purifier: true }).cards[2].action,
-    /Run your particle/,
-  );
-  assert.match(
-    makePlan(air, { budget: "flexible" }).cards[2].action,
-    /avoid ozone/,
-  );
+  assert.match(makePlan(air, { purifier: false, budget: "low" }).cards[2].action, /Damp-dust/);
+  assert.match(makePlan(air, { purifier: true }).cards[2].action, /Run your particle/);
+  assert.match(makePlan(air, { budget: "flexible" }).cards[2].action, /avoid ozone/);
 });
 test("Profile validation constrains untrusted values", () => {
   assert.deepEqual(
@@ -94,10 +87,7 @@ test("Carbon estimate uses total daily km without double counting", () => {
 });
 test("Minimum forecast ignores invalid values and can remain unhealthy", () => {
   assert.equal(bestWindow({ hourly: [] }), null);
-  assert.equal(
-    bestWindow({ hourly: [{ aqi: null }, { aqi: 240 }, { aqi: 230 }] }).aqi,
-    230,
-  );
+  assert.equal(bestWindow({ hourly: [{ aqi: null }, { aqi: 240 }, { aqi: 230 }] }).aqi, 230);
 });
 test("Demo scenarios are explicit, reproducible and city-specific", () => {
   for (const c of CITIES) {
@@ -110,44 +100,25 @@ test("Demo scenarios are explicit, reproducible and city-specific", () => {
 });
 test("Local assistant handles emergency, masks, school and ventilation", () => {
   const air = demoAir("delhi");
-  assert.match(
-    localAnswer("I have chest pain", air, DEFAULT_PROFILE),
-    /urgent medical/,
-  );
-  assert.match(
-    localAnswer("Which mask?", air, DEFAULT_PROFILE),
-    /does not filter all gases/,
-  );
+  assert.match(localAnswer("I have chest pain", air, DEFAULT_PROFILE), /urgent medical/);
+  assert.match(localAnswer("Which mask?", air, DEFAULT_PROFILE), /does not filter all gases/);
   assert.match(
     localAnswer("School for my child?", air, DEFAULT_PROFILE),
     /Do not change medication/,
   );
-  assert.match(
-    localAnswer("Open a window?", air, DEFAULT_PROFILE),
-    /combustion fumes/,
-  );
-  assert.match(
-    localAnswer("indoor plants?", air, DEFAULT_PROFILE),
-    /not a substitute/,
-  );
+  assert.match(localAnswer("Open a window?", air, DEFAULT_PROFILE), /combustion fumes/);
+  assert.match(localAnswer("indoor plants?", air, DEFAULT_PROFILE), /not a substitute/);
 });
 
 test("A question about a child applies sensitive precautions even with a general profile", () => {
   assert.match(
-    localAnswer(
-      "Can my child play outdoors?",
-      { aqi: 125 },
-      { sensitive: false },
-    ),
+    localAnswer("Can my child play outdoors?", { aqi: 125 }, { sensitive: false }),
     /Postpone strenuous/,
   );
 });
 
 test("Unknown air data never produces an unqualified travel recommendation", () => {
-  assert.match(
-    makePlan({ aqi: null }, { commute: "car" }).cards[1].action,
-    /unavailable/,
-  );
+  assert.match(makePlan({ aqi: null }, { commute: "car" }).cards[1].action, /unavailable/);
 });
 
 test("Activity readiness reflects AQI severity, sensitivity, and missing data", () => {
@@ -166,4 +137,46 @@ test("Activity readiness reflects AQI severity, sensitivity, and missing data", 
   const severe = activityReadiness({ aqi: 260 }, { sensitive: false });
   assert.equal(severe.find((i) => i.id === "exercise").status, "AVOID");
   assert.equal(severe.find((i) => i.id === "mask").status, "STRONGLY ADVISED");
+});
+
+test("isFiniteNumber rejects null, strings, NaN and Infinity", () => {
+  for (const value of [null, undefined, "42", Number.NaN, Infinity, -Infinity]) {
+    assert.equal(isFiniteNumber(value), false, String(value));
+  }
+  assert.equal(isFiniteNumber(0), true);
+  assert.equal(isFiniteNumber(-3.5), true);
+});
+
+test("Carbon impact uses the published factor table for every commute mode", () => {
+  const distance = 10;
+  const car = impact({ commute: "car", distance });
+  assert.equal(car.baseline, CO2_KG_PER_KM.car);
+  assert.equal(car.alternative, CO2_KG_PER_KM.transit);
+  assert.equal(
+    car.savedKg,
+    Number((distance * (CO2_KG_PER_KM.car - CO2_KG_PER_KM.transit)).toFixed(2)),
+  );
+  for (const commute of ["transit", "walk", "home"]) {
+    assert.equal(impact({ commute, distance }).savedKg, 0, commute);
+  }
+});
+
+test("Every preset city has complete, plausible demo data", () => {
+  for (const city of CITIES) {
+    const air = demoAir(city.id, 0);
+    assert.ok(isFiniteNumber(air.pm25) && isFiniteNumber(air.pm10), city.id);
+    assert.ok(air.pm10 >= air.pm25, `${city.id}: PM10 includes PM2.5`);
+    assert.equal(air.hourly.length, 12);
+    assert.ok(air.hourly.every((h) => h.aqi >= 12));
+  }
+});
+
+test("Severe air marks exercise as avoid and masks as strongly advised", () => {
+  const verdicts = Object.fromEntries(
+    activityReadiness({ aqi: 320 }, { sensitive: false }).map((v) => [v.id, v.status]),
+  );
+  assert.equal(verdicts.exercise, "AVOID");
+  assert.equal(verdicts.mask, "STRONGLY ADVISED");
+  assert.equal(verdicts.windows, "KEEP CLOSED");
+  assert.equal(verdicts.kids, "INDOORS");
 });
